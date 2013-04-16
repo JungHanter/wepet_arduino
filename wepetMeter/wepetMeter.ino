@@ -17,9 +17,13 @@ const int LED2 = 8; //green
 boolean bOnLED1 = true;
 boolean bOnLED2 = true;
 
+//time
+int year, month, day, hour, minute;
+
 
 //pedometer
 int pedoCnt = 0;
+int pedoRecordNum = 0;
 
 int old_x = 0;
 int old_y = 0;
@@ -27,7 +31,7 @@ int old_z = 0;
 
 
 //timer interrupt routine (using for save)
-void timer() {
+void timer_sec() {
   
 }
 
@@ -67,7 +71,7 @@ void setup() {
   pinMode(LED2, OUTPUT);
   digitalWrite(LED2, LOW);
   
-  MsTimer2::set(MINUTE, timer);
+  MsTimer2::set(MINUTE, timer_sec);
   MsTimer2::start();
 }
 
@@ -121,7 +125,6 @@ void loop() {
   
    
   delay(100);
-  
 }
 
 
