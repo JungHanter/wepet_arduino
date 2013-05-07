@@ -1,117 +1,145 @@
 #include <SD.h>
+
 #include <SoftwareSerial.h>
 #include <TinyGPS.h>
+
 #include <MsTimer2.h>
 
-#define WRITETIME_INTERVER 1000
+#include <SPI.h>
+#include <WiFi.h>
+
+#include <MyCalendar.h>
+#include <GPSDataFile.h>
+
+#define SECOND 1000
 
 //init RX2 / TX3
 #define RXPIN 2
 #define TXPIN 3
 
-#define TERMBAUD  115200
-#define GPSBAUD  4800
+void printGPS(float& flat, float& flon, unsigned long& age, TinyGPS& gps);
 
-File settingFile, gpsFile;
-boolean isFileOpened = false;
+float calcDistance(float lat1, float long1, float lat2, float long2);
 
-const int RTMODE_NONE = 0;
-const int RTMODE_RTSEND = 1;
+boolean connectWiFi();
+void httpRequest_sendData(const char* data, int dataSize);
+void httpRequest_getTime();
+void printWifiStatus();
 
-const int WALKMODE_NONE = 0;
-const int WALKMODE_RECORD = 1;
+void timer_sec();
 
-int rtmode = RTMODE_NONE;
-int wkmode = WALKMODE_NONE;
+//Wifi
+char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
+char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+int keyIndex = 0;            // your network key Index number (needed only for WEP)
+
+int wifiStatus = WL_IDLE_STATUS;
+
+WiFiClient client;
+
+char server[] = "rhinodream.com";
+
+unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
+boolean lastConnected = false;                  // state of the connection last time through the main loop
+const unsigned long postingInterval = 20*1000;  // delay between updates, in milliseconds
 
 String inputString = String();         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
 
-const int LED1 = 9; //red
-const int LED2 = 8; //green
+const int LED1 = 9; //red    //GPS기록시마디
+const int LED2 = 8; //green  //1초마다
 boolean bOnLED1 = true;
 boolean bOnLED2 = true;
 
+//file DB
+GPSData::GPSDataFile data;
+
+//gps
 TinyGPS gps;
 SoftwareSerial uart_gps(RXPIN, TXPIN);
 //SoftwareSerial uart_gps(RXPIN, TXPIN, false);
 
-int gpsRecordNum = 0;
+#define HOME_RADIUS 50
+#define CYCLESEC_INSAFE 10
+#define CYCLESEC_OUTSAFE 5
+#define CYCLESEC_RECORD 5
+#define CYCLESEC_LCM 10 //insafe, outsafe, record의 최소공배수
 
-// This is where you declare prototypes for the functions that will be 
-// using the TinyGPS library.
-void getgps(TinyGPS &gps);
+float homeLat = TinyGPS::GPS_INVALID_F_ANGLE, homeLong = TinyGPS::GPS_INVALID_F_ANGLE;
+int safeDist = 500;
+boolean bInSafe = true;
+boolean bActivity = false;
+
+float latitude = 37.503419, longitude = 127.044831;
+unsigned long age;
 
 
-
-void wrGPSSetFile() {
-  settingFile = SD.open("gps.pms", FILE_WRITE);
-  
-  settingFile.seek(0);
-  settingFile.write( (byte)(gpsRecordNum>>8) );
-  settingFile.write( (byte)((gpsRecordNum<<8)>>8) );
-  settingFile.flush();
-  settingFile.close();
-}
-
-void timer() {
+int timer_count = 0;
+void timer_sec() {
   bOnLED2 = true;
   digitalWrite(LED2, HIGH);
   
-  float latitude, longitude;
-  if(uart_gps.available())     // While there is data on the RX pin...
-  {
-    int c = uart_gps.read();    // load the data into a variable...
-    if(gps.encode(c))      // if gps value is valid ...
-    { 
-      gps.encode(c);
+  /*if(uart_gps.available()) {
+    char c = uart_gps.read();
+    if(gps.encode(c)) {
+      gps.f_get_position(&latitude, &longitude, &age);
+    }
+    printGPS(latitude, longitude, age, gps);
+  } else {
+    Serial.println("GPS is not available");
+  }*/
+  latitude += ((float)(random(-200, 200))/1000000.f;
+  longitude += ((float)(random(-200, 200))/1000000.f;
+  
+  
+  float nowDist = calcDistance(homeLat, homeLong, latitude, longitude);
+  bInSafe = (nowDist <= safeDist);
+  
+  if(nowDist > HOME_RADIUS) {
+    if(bActivity == false) {
+      bActivity = true;
+      data.startActivity();
+    }
     
-      if(rtmode = RTMODE_RTSEND) {
-        gps.f_get_position(&latitude, &longitude);
-        Serial.print(gpsRecordNum);
-        Serial.print(":Lat/Long: "); 
-        Serial.print(latitude,5); 
-        Serial.print(" / "); 
-        Serial.print(longitude,5);
-        Serial.print(']');
-      }
-      if(wkmode = WALKMODE_RECORD) {
-        while(isFileOpened);
-        isFileOpened = true;
-        
-        gpsFile = SD.open("gps.pmd", FILE_WRITE);
-        gpsFile.print(latitude,5);
-        gpsFile.print('/');
-        gpsFile.print(longitude,5);
-        gpsFile.print(']');
-        gpsFile.flush();
-        gpsFile.close();
-        
-        gpsRecordNum++;
-        wrGPSSetFile();
-        
-        isFileOpened = false;
+    if(timer_count % CYCLESEC_RECORD == 0) {
+      data.writeGPS(latitude, longitude);
+      Serial.println("data Record");
+    }
+    
+    if(bInSafe) {
+      if(timer_count % CYCLESEC_INSAFE == 0) {
+        //위치전송
+        Serial.println("GPS position transmisstion");
       }
     } else {
-      Serial.print("gps is invalid]");
+      if(timer_count % CYCLESEC_OUTSAFE == 0) {
+        //위치전송
+        Serial.println("GPS position transmisstion");
+      }
     }
   } else {
-    Serial.print("gps is not available]");
+    if(bActivity == true) {
+      //액티비티 끝남 -> 데이터 전송
+      bActivity = false;
+    }
+  }
+  
+  
+  timer_count++;
+  if(timer_count == CYCLESEC_LCM) {
+    timer_count = 0;
   }
 }
 
 void setup()
 {
   // Sets baud rate of your terminal program
-  Serial.begin(TERMBAUD);
+  Serial.begin(115200);
   Serial.flush();
   // Sets baud rate of your GPS
-  uart_gps.begin(GPSBAUD);
+  uart_gps.begin(4800);
   
-//  Serial.println("");
-//  Serial.println("GPS Shield QuickStart Example Sketch v12");
-//  Serial.println("       ...waiting for lock...           ");
-//  Serial.println("");
+  Serial.println("Init GPS done. waiting for lock...");
   
   inputString.reserve(100);
 //  Serial.print("Initializing SD card...");
@@ -120,19 +148,25 @@ void setup()
 //    Serial.println("initialization SD failed!");
   }
   
-  isFileOpened = true;
-  if(SD.exists("gps.pms")) {
-    settingFile = SD.open("gps.pms", FILE_READ);
-    gpsRecordNum = ( ((int)(settingFile.read()))<<8 ) + (int)(settingFile.read()) ;
-    settingFile.close();
-  } else {
-    gpsRecordNum = 0;
-    wrGPSSetFile();
-  }
-  isFileOpened = false;
-  
-//  Serial.println("initialization SD done.");
+  pinMode(10, OUTPUT);
+  if (!SD.begin(4)) {  //use digital-pin 4,10,11,12,13
+    Serial.println("Init SD failed!");
+    return;
+  }  
+  Serial.println("Init SD done.");
 
+  if (!data.begin()) {
+    Serial.println("Init DB failed!");
+    return;
+  }
+  
+  data.setCalendar(2013, 4, 21, 11, 07);
+  Serial.println("Init  DB done.");
+
+  latitude = longitude = TinyGPS::GPS_INVALID_F_ANGLE;
+  age = 0;
+
+  //led set
   bOnLED1 = true;
   pinMode(LED1, OUTPUT);
   digitalWrite(LED1, HIGH);
@@ -141,7 +175,8 @@ void setup()
   pinMode(LED2, OUTPUT);
   digitalWrite(LED2, LOW);
   
-  MsTimer2::set(WRITETIME_INTERVER, timer);
+  //timer set
+  MsTimer2::set(SECOND, timer_sec);
   MsTimer2::start();
 }
 
@@ -162,51 +197,11 @@ void loop()
   
   //request-response
   if (stringComplete) {
-    if (inputString == "RQ:PMCONN") {  //PM CONNECT
-      Serial.print("RS:CONCTD]");
-      
-    } else if (inputString == "RQ:DISCON") {  //DISCONNECT
-      Serial.print("RS:DISCON]");
-      
-    } else if (inputString == "RQ:GRTGPS") {  //GET REALTIME GPS
-      Serial.print("RS:GRTGPS]"); 
-      rtmode = RTMODE_RTSEND;
-      
-    } else if (inputString == "RQ:SRTGPS") {  //STOP RT GPS
-      rtmode = RTMODE_NONE;
-      
-    } else if (inputString == "RQ:STWALK") {  //START WALK
-      Serial.print("RS:STWALK]");
-      wkmode = WALKMODE_RECORD;
-      
-    } else if (inputString == "RQ:SPWALK") {  //STOP WALK -> SEND SAVED DATA
-      wkmode = WALKMODE_NONE;
-      Serial.print("RS:SPWALK]");  //rm ln
-      Serial.print(gpsRecordNum);
-      Serial.print(']');    //rm ln
-      
-      while(isFileOpened); //wait for file end;
-      isFileOpened = true;
-      gpsFile = SD.open("gps.pmd", FILE_READ);
-      while (gpsFile.available()) {
-        Serial.write(gpsFile.read());
-      }
-      gpsFile.close();
-      Serial.print("RS:GWALKD]");  //SEMD WALK DATA DONE;
-      
-      //reset record(saved) data file
-      gpsRecordNum = 0;
-      wrGPSSetFile();
-      SD.remove("gps.pmd");
-      
-      isFileOpened = false;
-      
-    }
+    
     
     inputString = "";
     stringComplete = false;
   }
-    
   
   delay(100);
 }
@@ -225,55 +220,4 @@ void serialEvent() {
       inputString += inChar;
     } 
   }
-}
-
-// The getgps function will get and print the values we want.
-void getgps(TinyGPS &gps)
-{
-  // To get all of the data into varialbes that you can use in your code, 
-  // all you need to do is define variables and query the object for the 
-  // data. To see the complete list of functions see keywords.txt file in 
-  // the TinyGPS and NewSoftSerial libs.
-  
-  // Define the variables that will be used
-  float latitude, longitude;
-  // Then call this function
-  gps.f_get_position(&latitude, &longitude);
-  // You can now print variables latitude and longitude
-  Serial.print("Lat/Long: "); 
-  Serial.print(latitude,5); 
-  Serial.print(", "); 
-  Serial.println(longitude,5);
-  
-  // Same goes for date and time
-  int year;
-  byte month, day, hour, minute, second, hundredths;
-  gps.crack_datetime(&year,&month,&day,&hour,&minute,&second,&hundredths);
-  // Print data and time
-  Serial.print("Date: "); Serial.print(month, DEC); Serial.print("/"); 
-  Serial.print(day, DEC); Serial.print("/"); Serial.print(year);
-  Serial.print("  Time: "); Serial.print(hour, DEC); Serial.print(":"); 
-  Serial.print(minute, DEC); Serial.print(":"); Serial.print(second, DEC); 
-  Serial.print("."); Serial.println(hundredths, DEC);
-  //Since month, day, hour, minute, second, and hundr
-  
-  // Here you can print the altitude and course values directly since 
-  // there is only one value for the function
-  Serial.print("Altitude (meters): "); Serial.println(gps.f_altitude());  
-  // Same goes for course
-  Serial.print("Course (degrees): "); Serial.println(gps.f_course()); 
-  // And same goes for speed
-  Serial.print("Speed(kmph): "); Serial.println(gps.f_speed_kmph());
-  //Serial.println();
-  
-  // Here you can print statistics on the sentences.
-  unsigned long chars;
-  unsigned short sentences, failed_checksum;
-  gps.stats(&chars, &sentences, &failed_checksum);
-  //Serial.print("Failed Checksums: ");Serial.print(failed_checksum);
-  //Serial.println(); Serial.println();
-  
-  // Here you can print the number of satellites in view
-  Serial.print("Satellites: ");
-  Serial.println(gps.satellites());
 }
