@@ -84,7 +84,6 @@ boolean bActive = false;
 String inputString = String();     // a string to hold incoming data
 boolean stringComplete = false;    // whether the string is complete
 
-
 const int LED9 = 9;
 const int LED8 = 8;
 boolean bOnLED9 = true;
@@ -121,12 +120,12 @@ void timer_sec() {
 
 //each min timer interrupt routine (using for record pedometer Count)
 void timer_min() {
-  data.writePedo(pedoCnt, activeCnt);
+  data.writePedo(pedoCnt/2, activeCnt);
   data.getCalendar().addMinute();
   Serial.print(minutes);
   Serial.println(" minute... Write Data...");
   Serial.print("steps:");
-  Serial.print(pedoCnt);
+  Serial.print(pedoCnt/2);
   Serial.print('/');
   Serial.print("actives:");
   Serial.println(activeCnt);
@@ -160,7 +159,7 @@ void startSetup() {
     Serial.println("Init DB failed!");
     while(true);
   }
-  data.setCalendar(2013, 4, 21, 11, 07);
+  data.setCalendar(2013, 4, 21, 11, 00);
   Serial.println("Init DB done.");
   
   Serial.print("Init timer... ");
