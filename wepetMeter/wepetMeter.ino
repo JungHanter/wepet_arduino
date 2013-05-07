@@ -10,6 +10,7 @@
 #ifndef ARDUINO_DUE_
 // #include <MsTimer2.h>
 #else
+ extern void serialEventRun(void) __attribute__((weak));
  void TC3_Handler();
  void startTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency);
 #endif
@@ -20,6 +21,9 @@
 #define MINUTE 60000 //1 minute (1000ms * 60sec)
 
 #define CHAR_BUF_SIZE 50
+
+void startSetup();
+void checkString(String& input);
 
 const char* getPageDate(PedoData::Page& page, char* buf);
 const char* getPageTime(PedoData::Page& page, char* buf);
@@ -141,24 +145,7 @@ void timer_hour() {
 }
 
 void startSetup() {
-
-}
-
-// the setup routine runs once when you press reset:
-void setup() {
-  // initialize serial communication at 9600 bits per second:
-  Serial.begin(115200);
-  Serial.flush();
-
-  bSetup = false;
-  inputString.reserve(100);
-  
-  // check for the presence of the shield:
-//  if (WiFi.status() == WL_NO_SHIELD) {
-//    Serial.println("WiFi shield not present"); 
-//    // don't continue:
-//    while(true);
-//  }
+  //try wifi connect 
 
   //SD Card
   pinMode(10, OUTPUT);
@@ -169,13 +156,43 @@ void setup() {
   Serial.println("Init SD done.");
 
   //data
-//  Serial.print("Initializing Pedometer Database... ");
   if (!data.begin()) {
     Serial.println("Init DB failed!");
     while(true);
   }
   data.setCalendar(2013, 4, 21, 11, 07);
   Serial.println("Init DB done.");
+  
+  Serial.print("Init timer... ");
+#ifdef ARDUINO_DUE_
+  startTimer(TC1, 0, TC3_IRQn, 1);
+  Serial.println("Start with Arduino Due!");
+#else
+  MsTimer2::set(SECOND, timer_sec);
+  MsTimer2::start();
+  Serial.println("Start with AVR Arudino!");
+#endif
+
+  Serial.println();
+  
+  bSetup = true;
+}
+
+// the setup routine runs once when you press reset:
+void setup() {
+  // initialize serial communication at 9600 bits per second:
+  Serial.begin(115200);
+  Serial.flush();
+  
+  //wifi shield check
+//  if (WiFi.status() == WL_NO_SHIELD) {
+//    Serial.println("WiFi shield not present"); 
+//    // don't continue:
+//    while(true);
+//  }
+
+  bSetup = false;
+  inputString.reserve(100);
   
   second = minutes = 0;
 
@@ -192,38 +209,35 @@ void setup() {
   bOnLED8 = false;
   pinMode(LED8, OUTPUT);
   digitalWrite(LED8, LOW);
-
-  Serial.print("Init timer... ");
-#ifdef ARDUINO_DUE_
-  startTimer(TC1, 0, TC3_IRQn, 1);
-  Serial.println("Start with Arduino Due!");
-#else
-  MsTimer2::set(SECOND, timer_sec);
-  MsTimer2::start();
-  Serial.println("Start with AVR Arudino!");
-#endif
+  
+  Serial.println("waiting for setup...");
+  //startSetup();
 }
 
 // the loop routine runs over and over again forever:
 void loop() {
-  if(bOnLED9) {
-    bOnLED9 = false;
-    digitalWrite(LED9, LOW);
-  }
-
-  if(bOnLED8) {
-    bOnLED8 = false;
-    digitalWrite(LED8, LOW);
-  }
-
+  delay(LOOP_DELAY);
+  
   //request-response
   if (stringComplete) {
+    checkString(inputString);
     
     //clear the string:
     inputString = "";
     stringComplete = false;
   }
-
+  
+  if(!bSetup) return;
+  
+  //LED off  
+  if(bOnLED9) {
+    bOnLED9 = false;
+    digitalWrite(LED9, LOW);
+  }
+  if(bOnLED8) {
+    bOnLED8 = false;
+    digitalWrite(LED8, LOW);
+  }
 
   /********** check Step **********/
   // read the input on analog pin 0~2:
@@ -254,9 +268,6 @@ void loop() {
       bActive = true;
     }
   }
-
-
-  delay(LOOP_DELAY);
 }
 
 void serialEvent() {
@@ -268,15 +279,27 @@ void serialEvent() {
     // so the main loop can do something about it:
     if (inChar == '\n') {
       stringComplete = true;
-    } 
-    else {
+    } else {
       // add it to the inputString:
       inputString += inChar;
     } 
   }
 }
 
+void checkString(String& input) {
+  if(input == "setup") {
+    Serial.println("setup Pedometer");
+    startSetup();
+  } else if (input == "sendAllData") {
+    sendAllPedoData();
+  }
+}
+
 #ifdef ARDUINO_DUE_
+void serialEventRun(void) {
+  if (Serial.available()) serialEvent();
+}
+
 //TC1 ch 0
 void TC3_Handler()
 {
@@ -284,7 +307,6 @@ void TC3_Handler()
   
   timer_sec();
 }
-
 
 void startTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency) {
   //frequency 1 per 1sec
