@@ -1,29 +1,91 @@
 void sendAllPedoData() {
   PedoData::Page page;
   int link = -1;
-
+  
   do {
+    while(bDataUsing);
+    bDataUsing=true;
     link = data.readNextUsingPage(page);
-
+    bDataUsing=false;
+    
     if(link == -2) {
       Serial.println("Pedo data is empty.");
       return;
     } 
     else {
       while(!sendPage(page));
+      while(bDataUsing);
+      bDataUsing=true;
       data.setPageUnused(page);
+      bDataUsing=false;
     }
 
   } 
   while (link != -1);
 }
 
-boolean sendPage(PedoData::Page& page) {
-  Serial.print("*** Send Page : ");
-  Serial.print(page.pageNum);
-  Serial.println(" ***");
-  printPage(page);
+void printAllPedoData() {
+  PedoData::Page page;
+  int link = -1;
 
+  do {
+    while(bDataUsing);
+    bDataUsing=true;
+    link = data.readNextUsingPage(page);
+    bDataUsing=false;
+
+    if(link == -2) {
+      Serial.println("Pedo data is empty.");
+      return;
+    } 
+    else {
+      Serial.print("*** print Page : ");
+      Serial.print(page.pageNum);
+      Serial.println(" ***");
+      printPage(page);
+      
+      while(bDataUsing);
+      bDataUsing=true;
+      data.setPageUnused(page);
+      bDataUsing=false;
+    }
+
+  } 
+  while (link != -1);
+}
+
+
+boolean sendPage(PedoData::Page& page) {
+  
+  Serial.print("Send Page : ");
+  Serial.print(page.pageNum);
+  Serial.print(" ..... ");
+
+  int dataSize;
+  transHTTPData(SERIAL_NUMBER, page, httpBuf, &dataSize);
+  
+  Serial.print("request ... ");
+  if(!httpRequest_sendData(httpBuf, dataSize)) {
+    Serial.println("request fail!");
+    return false;
+  }
+  lastConnected = client.connected();
+  
+  char bufLine[128];
+  readHTTPResponse(httpBuf);
+  disconnectServer();
+  
+  readLineTo(httpBuf, bufLine, 0);
+  if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
+    Serial.println("success!");
+    while(readLine(httpBuf, bufLine)) {
+      Serial.println(bufLine);
+    }
+  } else {
+    Serial.print("response fail: ");
+    Serial.println(bufLine);
+    return false;
+  }
   return true;
 }
 
@@ -52,6 +114,7 @@ void printPage(PedoData::Page& page) {
 
 void updateCalendar(const char* strCalendar) {
   int pos, chPos;
+  boolean bFinish = false;
 
   int stat = 0; //stat 0(year) ~ 4(minute)
   char chYear[5], chMonth[3], chDay[3], chHour[3], chMinute[3];
@@ -110,11 +173,11 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 4:     //minute
-      if(strCalendar[pos] == '\0') {
+      if(strCalendar[pos] == '\0' || strCalendar[pos] == ' ') {
         chMinute[chPos] = '\0';
 
         stat = -1;
-
+        bFinish = true;
       } 
       else {
         chMinute[chPos++] = strCalendar[pos];
@@ -122,8 +185,11 @@ void updateCalendar(const char* strCalendar) {
       break;
     }
 
-    if(strCalendar[pos] == '\0') {
+    if(bFinish) {
+      while(bDataUsing);
+      bDataUsing = true;
       data.setCalendar(atoi(chYear), atoi(chMonth), atoi(chDay), atoi(chHour), atoi(chMinute));
+      bDataUsing = false;
       return;
     }
 
@@ -131,14 +197,14 @@ void updateCalendar(const char* strCalendar) {
   }
 }
 
-void transHTTPData(unsigned long serialNum, PedoData::Page& page, char* buf, int* bufSize) {
+void transHTTPData(const char* serialNum, PedoData::Page& page, char* buf, int* bufSize) {
     buf[0] = '\0';
     
     char vBuf[20];
     int stepArr[6], stepNum;
     
     strcpy(buf, "serial_number=");
-    sprintf(vBuf, "%lu", serialNum);
+    sprintf(vBuf, "%s", serialNum);
     strcat(buf, vBuf);
     
     strcat(buf, "&date_time=");

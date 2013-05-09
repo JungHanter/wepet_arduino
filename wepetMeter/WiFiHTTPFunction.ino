@@ -1,12 +1,10 @@
 void disconnectServer() {
-  if (!client.connected() && lastConnected) {
-    Serial.println();
-    Serial.println("disconnecting.");
+  if (!client.connected()) {
     client.stop();
   }
 }
 
-boolean connectWiFi() {
+boolean connectWiFi(boolean bFirst) {
   while ( wifiStatus != WL_CONNECTED) { 
     Serial.print("Attempting to connect to SSID: ");
     Serial.println(ssid);
@@ -19,16 +17,17 @@ boolean connectWiFi() {
   
   printWifiStatus();
   
-  disconnectServer();
-  
+//  disconnectServer();
+
+  return true;
 }
 
-void httpRequest_sendData(const char* data, int dataSize) {
+boolean httpRequest_sendData(const char* data, int dataSize) {
   // if there's a successful connection:
   if (client.connect(server, 80)) {
     Serial.println("connecting...SendData...");
 
-    client.println("POST /pedometer_post_test2/ HTTP/1.1");
+    client.println("POST /pedometer_raw_data/ HTTP/1.1");
     client.println("Host: rhinodream.com");
     client.println("User-Agent: Pedometer");
     client.println("Connection: close");
@@ -39,16 +38,19 @@ void httpRequest_sendData(const char* data, int dataSize) {
     
     // note the time that the connection was made:
     lastConnectionTime = millis();
+    return true;
   } 
   else {
     // if you couldn't make a connection:
     Serial.println("connection failed");
     Serial.println("disconnecting.");
     client.stop();
+    
+    return false;
   }
 }
 
-void httpRequest_getTime() {
+boolean httpRequest_getTime() {
   if (client.connect(server, 80)) {
     Serial.println("connecting...GetTime...");
 
@@ -56,15 +58,19 @@ void httpRequest_getTime() {
     client.println("Host: rhinodream.com");
     client.println("User-Agent: Pedometer");
     client.println("Connection: close");
+    client.println();
     
     // note the time that the connection was made:
     lastConnectionTime = millis();
+    return true;
   } 
   else {
     // if you couldn't make a connection:
     Serial.println("connection failed");
     Serial.println("disconnecting.");
     client.stop();
+    
+    return false;
   }
 }
 

@@ -30,17 +30,25 @@ const char* getPageTime(PedoData::Page& page, char* buf);
 void getPageSteps(PedoData::Page& page, int* arrStep, int* pCount);
 int getPageActives(PedoData::Page& page);
 
+int sendErrorCnt = 0;
 void sendAllPedoData();
+void printAllPedoData();
 void printPage(PedoData::Page& page);
 boolean sendPage(PedoData::Page& page);
-void transHTTPData(unsigned long serialNum, PedoData::Page& page, char* buf, int* bufSize);
+void transHTTPData(const char* serialNum, PedoData::Page& page, char* buf, int* bufSize);
+
+char httpBuf[512];
+int httpBufCnt = 0;
+int readHTTPResponse(char* buf);
+boolean readLine(const char* src, char* dest);
+const char* readLineTo(const char* src, char* dest, int lineNum);
 
 void updateCalendar(const char* strCalendar);
 
-boolean connectWiFi();
+boolean connectWiFi(boolean bFirst);
 void disconnectServer();
-void httpRequest_sendData(const char* data, int dataSize);
-void httpRequest_getTime();
+boolean httpRequest_sendData(const char* data, int dataSize);
+boolean httpRequest_getTime();
 void printWifiStatus();
 
 void timer_sec();
@@ -57,6 +65,7 @@ int keyIndex = 0;            // your network key Index number (needed only for W
 int wifiStatus = WL_IDLE_STATUS;
 
 WiFiClient client;
+boolean bSendData = false;
 
 char server[] = "rhinodream.com";
 
@@ -66,11 +75,12 @@ const unsigned long postingInterval = 20*1000;  // delay between updates, in mil
 
 //file DB
 PedoData::PedoDataFile data;
+boolean bDataUsing = false;
 
 int second = 0, minutes = 0;
 
 //pedometer
-unsigned long serialNumber = 11111111;
+char* SERIAL_NUMBER = "11111111";
 
 unsigned int pedoCnt = 0;
 unsigned int activeCnt = 0;
@@ -120,8 +130,12 @@ void timer_sec() {
 
 //each min timer interrupt routine (using for record pedometer Count)
 void timer_min() {
+  while(bDataUsing);
+  bDataUsing = true;
   data.writePedo(pedoCnt/2, activeCnt);
   data.getCalendar().addMinute();
+  bDataUsing=false;
+  
   Serial.print(minutes);
   Serial.println(" minute... Write Data...");
   Serial.print("steps:");
@@ -140,12 +154,11 @@ void timer_min() {
 
 //each hour timer interrupt routine (using for wifi data transmission)
 void timer_hour() {
-  sendAllPedoData();
+//  sendAllPedoData();
+  bSendData = true;
 }
 
 void startSetup() {
-  //try wifi connect 
-
   //SD Card
   pinMode(10, OUTPUT);
   if (!SD.begin(4)) {  //use digital-pin 4,10,11,12,13
@@ -159,9 +172,32 @@ void startSetup() {
     Serial.println("Init DB failed!");
     while(true);
   }
-  data.setCalendar(2013, 4, 21, 11, 00);
+//  data.setCalendar(2013, 4, 21, 11, 00);
   Serial.println("Init DB done.");
   
+  //try wifi connect
+  connectWiFi(true);
+  if(!httpRequest_getTime()) {
+    Serial.println("init time httpRequest fail...");
+    while(true);
+  }
+  lastConnected = client.connected();
+  
+  char bufLine[128];
+  readHTTPResponse(httpBuf);
+  disconnectServer();
+  
+  readLineTo(httpBuf, bufLine, 0);
+  if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
+    readLineTo(httpBuf, bufLine, 9);
+    Serial.print("Init Date : ");
+    Serial.println(bufLine);
+    updateCalendar(bufLine);
+  } else {
+    Serial.println("Init WiFi, Time failed!");
+    while(true);
+  }
+
   Serial.print("Init timer... ");
 #ifdef ARDUINO_DUE_
   startTimer(TC1, 0, TC3_IRQn, 1);
@@ -183,12 +219,14 @@ void setup() {
   Serial.begin(115200);
   Serial.flush();
   
+  delay(100);
+  
   //wifi shield check
-//  if (WiFi.status() == WL_NO_SHIELD) {
-//    Serial.println("WiFi shield not present"); 
-//    // don't continue:
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present"); 
+    // don't continue:
 //    while(true);
-//  }
+  }
 
   bSetup = false;
   inputString.reserve(100);
@@ -236,6 +274,13 @@ void loop() {
   if(bOnLED8) {
     bOnLED8 = false;
     digitalWrite(LED8, LOW);
+  }
+  
+  
+  /**** send Data ****/
+  if(bSendData) {
+    sendAllPedoData();
+    bSendData = false;
   }
 
   /********** check Step **********/
@@ -291,6 +336,8 @@ void checkString(String& input) {
     startSetup();
   } else if (input == "sendAllData") {
     sendAllPedoData();
+  } else if (input == "printAllData") {
+    printAllPedoData();
   }
 }
 
