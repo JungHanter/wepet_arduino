@@ -21,7 +21,12 @@ void printGPS(float& flat, float& flon, unsigned long& age, TinyGPS& gps) {
     
 }
 
+
 float calcDistance(float lat1, float long1, float lat2, float long2) {
+    if(lat1 == TinyGPS::GPS_INVALID_F_ANGLE || long1 == TinyGPS::GPS_INVALID_F_ANGLE ||
+       lat2 == TinyGPS::GPS_INVALID_F_ANGLE || long2 == TinyGPS::GPS_INVALID_F_ANGLE)
+         return 0.0f;
+  
     /*
      위도,경도에 대한 절대값 계산
      */
@@ -48,4 +53,89 @@ float calcDistance(float lat1, float long1, float lat2, float long2) {
     float dist = sqrt( (lon_dist*lon_dist) + (lat_dist*lat_dist) );
     
     return dist;
+}
+
+void updateCalendar(const char* strCalendar) {
+  int pos, chPos;
+  boolean bFinish = false;
+
+  int stat = 0; //stat 0(year) ~ 4(minute)
+  char chYear[5], chMonth[3], chDay[3], chHour[3], chMinute[3];
+  char* nowCh = chYear;
+
+  pos = chPos = 0;
+
+  while(true) {
+    switch (stat) {
+    case 0:     //year
+      if(strCalendar[pos] == '/') {
+        chYear[chPos] = '\0';
+
+        stat = 1;
+        nowCh = chMonth;
+        chPos = 0;
+      } 
+      else {
+        chYear[chPos++] = strCalendar[pos];
+      }
+      break;
+    case 1:     //month
+      if(strCalendar[pos] == '/') {
+        chMonth[chPos] = '\0';
+
+        stat = 2;
+        nowCh = chDay;
+        chPos = 0;
+      } 
+      else {
+        chMonth[chPos++] = strCalendar[pos];
+      }
+      break;
+    case 2:     //day
+      if(strCalendar[pos] == ' ') {
+        chDay[chPos] = '\0';
+
+        stat = 3;
+        nowCh = chHour;
+        chPos = 0;
+      } 
+      else {
+        chDay[chPos++] = strCalendar[pos];
+      }
+      break;
+    case 3:     //hour
+      if(strCalendar[pos] == ':') {
+        chHour[chPos] = '\0';
+
+        stat = 4;
+        nowCh = chMinute;
+        chPos = 0;
+      } 
+      else {
+        chHour[chPos++] = strCalendar[pos];
+      }
+      break;
+    case 4:     //minute
+      if(strCalendar[pos] == '\0' || strCalendar[pos] == ' ') {
+        chMinute[chPos] = '\0';
+
+        stat = -1;
+        bFinish = true;
+      } 
+      else {
+        chMinute[chPos++] = strCalendar[pos];
+      }
+      break;
+    }
+
+    if(bFinish) {
+      while(bDataUsing);
+      bDataUsing = true;
+      data.setCalendar(atoi(chYear), atoi(chMonth), atoi(chDay), atoi(chHour), atoi(chMinute));
+      bDataUsing = false;
+      return;
+    }
+
+    pos++;
+  }
 }

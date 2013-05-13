@@ -204,8 +204,8 @@ void transHTTPData(const char* serialNum, PedoData::Page& page, char* buf, int* 
     int stepArr[6], stepNum;
     
     strcpy(buf, "serial_number=");
-    sprintf(vBuf, "%s", serialNum);
-    strcat(buf, vBuf);
+//    sprintf(vBuf, "%s", serialNum);
+    strcat(buf, serialNum);
     
     strcat(buf, "&date_time=");
     strcat(buf, getPageDate(page, vBuf));
