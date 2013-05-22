@@ -3,37 +3,43 @@
 
 #include <WiFi.h>
 
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 #include <TinyGPS.h>
 
 #include <MyCalendar.h>
 #include <GPSDataFile.h>
 
-//#define ARDUINO_DUE_  //if arudino due
+#define ARDUINO_DUE_  //if arudino due
 #ifndef ARDUINO_DUE_
- #include <MsTimer2.h>
+// #include <MsTimer2.h>
 #else
  extern void serialEventRun(void) __attribute__((weak));
- void TC3_Handler();x
+ void TC3_Handler();
  void startTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency);
 #endif
 
 #define LOOP_DELAY 50
 #define SECOND 1000
 #define CHAR_BUF_SIZE 50
+#define MOVERANGE 50.f
+
+#define SERVER_DATA_LINE_NUM 8
+#define HTTP_BUF_SIZE 512
 
 //init RX2 / TX3
-#define RXPIN 2
-#define TXPIN 3
+//#define RXPIN 2
+//#define TXPIN 3
 
 void startSetup();
 void checkString(String& input);
 
 void printGPS(float& flat, float& flon, unsigned long& age, TinyGPS& gps);
 float calcDistance(float lat1, float long1, float lat2, float long2);
+boolean setSettings(const char* buf);
 
-char httpBuf[512];
+char httpBuf[HTTP_BUF_SIZE];
 int httpBufCnt = 0;
+void readPrintHttpResponse();
 int readHTTPResponse(char* buf);
 boolean readLine(const char* src, char* dest);
 const char* readLineTo(const char* src, char* dest, int lineNum);
@@ -44,7 +50,7 @@ boolean connectWiFi(boolean bFirst);
 void disconnectServer();
 boolean httpRequest_sendLocation(const float& lat, const float& lon);
 boolean httpRequest_sendActivity();
-boolean httpRequest_getTime();
+boolean httpRequest_getSettings();
 void printWifiStatus();
 
 void checkGPS();
@@ -53,15 +59,18 @@ void timer_sec();
 boolean bSetup = false;
 
 //Wifi
-char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
-char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
+//char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+char ssid[] = "mr100"; //  your network SSID (name) 
+char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int wifiStatus = WL_IDLE_STATUS;
 
 WiFiClient client;
 
-char server[] = "rhinodream.com";
+//char server[] = "rhinodream.com";
+IPAddress server(54,249,149,48);
 
 unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
 boolean lastConnected = false;                  // state of the connection last time through the main loop
@@ -81,10 +90,10 @@ MyCalendar nowCalendar;
 boolean bDataUsing = false;
 
 //gps
-char* SERIAL_NUMBER = "11111111";
+char* SERIAL_NUMBER = "ht1";
 
 TinyGPS gps;
-SoftwareSerial uart_gps(RXPIN, TXPIN);
+//SoftwareSerial uart_gps(RXPIN, TXPIN);
 //SoftwareSerial uart_gps(RXPIN, TXPIN, false);
 
 #define HOME_RADIUS 50
@@ -100,8 +109,8 @@ boolean bInSafe = true;
 boolean bActivity = false;
 
 unsigned long activityDist = 0;
-float latitude = 37.503419f;
-float longitude = 127.044831f;
+float latitude = 37.503419f, oldLatitude = 37.503419f;
+float longitude = 127.044831f, oldLongitude = 127.044831f;
 unsigned long age;
 
 boolean bGPSCheck = false;
@@ -113,14 +122,20 @@ void timer_sec() {
   digitalWrite(LED8, HIGH);
   
   timer_count++;
+    if(timer_count == CYCLESEC_LCM) {
+    timer_count = 0;
+  }
+  
   second++;
   if(second == 60) {
     second = 0;
     nowCalendar.addMinute();
   }
   
-  /*if(uart_gps.available()) {
-    char c = uart_gps.read();
+  oldLatitude = latitude;
+  oldLongitude = longitude;
+  /*if(Serial1.available()) {
+    char c = Serial1.read();
     if(gps.encode(c)) {
       gps.f_get_position(&latitude, &longitude, &age);
     }
@@ -131,12 +146,16 @@ void timer_sec() {
   //test move data
   latitude += ( (float)(random(-200,200)) / 1000000.f );
   longitude += ( (float)(random(-200,200)) / 1000000.f );
+  
+  if(bDataUsing) return;
 
   bGPSCheck = true;
 }
 
 void checkGPS() {
   float nowDist = calcDistance(homeLat, homeLong, latitude, longitude);
+  float moveRange = calcDistance(oldLatitude, oldLongitude, latitude, longitude);
+  
   bInSafe = (nowDist <= safeDist);
   
   //  printGPS(latitude, longitude, age, gps);
@@ -150,50 +169,75 @@ void checkGPS() {
   Serial.println(longitude, 6);
     
   if(nowDist > HOME_RADIUS) {
+    while(bDataUsing);
+    bDataUsing = true;
     if(bActivity == false) {
       bActivity = true;
       data.setCalendar(nowCalendar);
       data.startActivity();
-      Serial.println("start");
+      Serial.println("start act");
     }
     
-    if(timer_count % CYCLESEC_RECORD == 0) {
-      data.writeGPS(latitude, longitude);
-      Serial.println("Record");
-    }
+//    if(moveRange >= MOVERANGE) {
+      if(timer_count % CYCLESEC_RECORD == 0) {
+        data.writeGPS(latitude, longitude);
+        Serial.println("Record");
+      }
+      
+      if(bInSafe) {
+        if(timer_count % CYCLESEC_INSAFE == 0) {
+          //위치전송
+          httpRequest_sendLocation(latitude, longitude);
+          lastConnected = client.connected();
+          disconnectServer();
+          
+          readPrintHttpResponse();
+          Serial.println("GPS pos tr");
+        }
+      } else {
+        if(timer_count % CYCLESEC_OUTSAFE == 0) {
+          //위치전송
+          httpRequest_sendLocation(latitude, longitude);
+          lastConnected = client.connected();
+          disconnectServer();
+          
+          readPrintHttpResponse();
+          Serial.println("GPS pos tr out");
+        }
+      }
+//    }
     
-    if(bInSafe) {
-      if(timer_count % CYCLESEC_INSAFE == 0) {
-        //위치전송
-        httpRequest_sendLocation(latitude, longitude);
-        lastConnected = client.connected();
-        Serial.println("GPS pos tr");
-      }
-    } else {
-      if(timer_count % CYCLESEC_OUTSAFE == 0) {
-        //위치전송
-        httpRequest_sendLocation(latitude, longitude);
-        lastConnected = client.connected();
-        Serial.println("GPS pos tr out");
-      }
-    }
+    bDataUsing =false;
+    
   } else {
     if(bActivity == true) {
       //액티비티 끝남 -> 데이터 전송, 시간동기화?
-      Serial.print("activity data request ... ");
-      if(!httpRequest_sendActivity()) {
-        Serial.println("request fail!");
+      Serial.println("end act");
+      
+      while(bDataUsing);
+      bDataUsing = true;
+      
+      if(data.getRecordNum() > 0) {
+        Serial.print("activity data request ... ");
+        
+        if(!httpRequest_sendActivity()) {
+          Serial.println("request fail!");
+        } else {
+          disconnectServer();
+          Serial.println("success!");
+          
+          readPrintHttpResponse();
+        }
+        lastConnected = client.connected();
+      } else {
+        Serial.println("no data...");
       }
-      lastConnected = client.connected();
       
       data.readDone();
-      Serial.println("end");
+      bDataUsing = false;
+      
       bActivity = false;
     }
-  }
-  
-  if(timer_count == CYCLESEC_LCM) {
-    timer_count = 0;
   }
   
 }
@@ -215,15 +259,41 @@ void startSetup() {
   data.setCalendar(nowCalendar);
   Serial.println("Init DB done.");
   
-  //try wifi connect
+  //try wifi connect for init time
   connectWiFi(true);
-  if(!httpRequest_getTime()) {
+  
+  if(!httpRequest_getSettings()) {
     Serial.println("init time httpRequest fail...");
     while(true);
   }
   lastConnected = client.connected();
   
   char bufLine[128];
+  readHTTPResponse(httpBuf);
+  disconnectServer();
+  
+  readLineTo(httpBuf, bufLine, 0);
+  if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
+    readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
+    Serial.print("Init Date : ");
+    Serial.print(bufLine);
+    updateCalendar(bufLine);
+//    data.setCalendar(2013, 5, 19, 19, 38);  //DEBUG
+    Serial.println(" ..... done.");
+  } else {
+    Serial.println("Init WiFi, Time failed!");
+    while(true);
+  }
+  
+  if(!httpRequest_getSettings()) {
+    Serial.println("init time httpRequest fail...");
+    while(true);
+  }
+  lastConnected = client.connected();
+  
+  readPrintHttpResponse();
+  
+  /*char bufLine[128];
   readHTTPResponse(httpBuf);
   disconnectServer();
   
@@ -236,8 +306,9 @@ void startSetup() {
   } else {
     Serial.println("Init WiFi, Time failed!");
     while(true);
-  }
+  }*/
   
+  randomSeed(millis());
     
   Serial.print("Init timer... ");
 #ifdef ARDUINO_DUE_
@@ -260,7 +331,7 @@ void setup()
   Serial.flush();
   
   // Sets baud rate of your GPS
-  uart_gps.begin(4800);
+  Serial1.begin(4800);
   Serial.println("Init GPS done. waiting for lock...");
   
   delay(100);

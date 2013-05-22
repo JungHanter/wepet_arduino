@@ -55,6 +55,70 @@ float calcDistance(float lat1, float long1, float lat2, float long2) {
     return dist;
 }
 
+boolean setSettings(const char* buf) {
+  if(buf[0] == '0') {
+    if(buf[2] == '0') {
+      Serial.println("not registed SN!");
+    } else {
+      Serial.println("setting transmission failure.");
+    }
+    return false;
+  }
+  
+  int what = 0;
+  char* nowStr;
+  char strLat[8], strLatF[8], strLon[8], strLonF[8], strDist[8];
+  int bufCnt=0, cnt=0;
+  
+  bufCnt=2;
+  nowStr = strLat;
+  while(true) {
+    if(buf[bufCnt] == ' ') {
+      
+    } else if(buf[bufCnt] == '\0' || buf[bufCnt] == '\n') {
+      strDist[cnt] = '\0';
+      break;
+      
+    } else if(buf[bufCnt] == '.' || buf[bufCnt] == ',') {
+      what++;
+      
+      nowStr[cnt] = '\0';
+      if(what == 0) {
+        nowStr = strLat;
+      } else if(what == 1) {
+        nowStr = strLatF;
+      } else if(what == 2) {
+        nowStr = strLon;
+      } else if(what == 3) {
+        nowStr = strLonF;
+      } else if(what == 4) {
+        nowStr = strDist;
+      }
+      
+      cnt = 0;
+    } else {
+      nowStr[cnt] = buf[bufCnt];
+      
+      cnt++;
+    }
+    
+    bufCnt++;
+  }
+  
+  if(strLat[0] == '-')
+    homeLat  = (float)atoi(strLat) - ( (float)atol(strLatF) / (float)pow(10, strlen(strLatF)) );
+  else
+    homeLat  = (float)atoi(strLat) + ( (float)atol(strLatF) / (float)pow(10, strlen(strLatF)) );
+    
+  if(strLon[0] == '-')
+    homeLong = (float)atoi(strLon) - ( (float)atol(strLonF) / (float)pow(10, strlen(strLonF)) );
+  else
+    homeLong = (float)atoi(strLon) + ( (float)atol(strLonF) / (float)pow(10, strlen(strLonF)) );
+    
+  safeDist = atoi(strDist);
+  
+}
+
 void updateCalendar(const char* strCalendar) {
   int pos, chPos;
   boolean bFinish = false;

@@ -125,7 +125,7 @@ void updateCalendar(const char* strCalendar) {
   while(true) {
     switch (stat) {
     case 0:     //year
-      if(strCalendar[pos] == '/') {
+      if(strCalendar[pos] == ',') {
         chYear[chPos] = '\0';
 
         stat = 1;
@@ -137,7 +137,7 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 1:     //month
-      if(strCalendar[pos] == '/') {
+      if(strCalendar[pos] == ',') {
         chMonth[chPos] = '\0';
 
         stat = 2;
@@ -149,7 +149,7 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 2:     //day
-      if(strCalendar[pos] == ' ') {
+      if(strCalendar[pos] == ',') {
         chDay[chPos] = '\0';
 
         stat = 3;
@@ -161,7 +161,7 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 3:     //hour
-      if(strCalendar[pos] == ':') {
+      if(strCalendar[pos] == ',') {
         chHour[chPos] = '\0';
 
         stat = 4;

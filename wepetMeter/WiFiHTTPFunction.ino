@@ -1,5 +1,6 @@
 void disconnectServer() {
   if (!client.connected()) {
+    client.flush();
     client.stop();
   }
 }
@@ -19,7 +20,7 @@ boolean connectWiFi(boolean bFirst) {
   
 //  disconnectServer();
 
-  return true;
+  return true;  
 }
 
 boolean httpRequest_sendData(const char* data, int dataSize) {
@@ -27,9 +28,9 @@ boolean httpRequest_sendData(const char* data, int dataSize) {
   if (client.connect(server, 80)) {
     Serial.println("connecting...SendData...");
 
-    client.println("POST /pedometer_raw_data/ HTTP/1.1");
-    client.println("Host: rhinodream.com");
-    client.println("User-Agent: Pedometer");
+    client.println("POST /hw/meter/step/ HTTP/1.1");
+    client.println("Host: 54.249.149.48");
+    client.println("User-Agent: WepetMeter");
     client.println("Connection: close");
     client.print("Content-Length: ");
     client.println(dataSize);
@@ -54,9 +55,9 @@ boolean httpRequest_getTime() {
   if (client.connect(server, 80)) {
     Serial.println("connecting...GetTime...");
 
-    client.println("POST /time_test/ HTTP/1.1");
-    client.println("Host: rhinodream.com");
-    client.println("User-Agent: Pedometer");
+    client.println("POST /hw/time/now/ HTTP/1.1");
+    client.println("Host: 54.249.149.48");
+    client.println("User-Agent: WepetMeter");
     client.println("Connection: close");
     client.println();
     

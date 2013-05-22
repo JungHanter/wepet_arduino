@@ -20,6 +20,9 @@
 #define SECOND 1000  //1 sec (1000ms)
 #define MINUTE 60000 //1 minute (1000ms * 60sec)
 
+#define SERVER_DATA_LINE_NUM 8
+
+#define HTTP_BUF_SIZE 512
 #define CHAR_BUF_SIZE 50
 
 void startSetup();
@@ -37,8 +40,9 @@ void printPage(PedoData::Page& page);
 boolean sendPage(PedoData::Page& page);
 void transHTTPData(const char* serialNum, PedoData::Page& page, char* buf, int* bufSize);
 
-char httpBuf[512];
+char httpBuf[HTTP_BUF_SIZE];
 int httpBufCnt = 0;
+void readPrintHttpResponse();
 int readHTTPResponse(char* buf);
 boolean readLine(const char* src, char* dest);
 const char* readLineTo(const char* src, char* dest, int lineNum);
@@ -58,8 +62,10 @@ void timer_hour();
 boolean bSetup = false;
 
 //Wifi
-char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
-char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
+//char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+char ssid[] = "mr100"; //  your network SSID (name) 
+char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int wifiStatus = WL_IDLE_STATUS;
@@ -67,7 +73,8 @@ int wifiStatus = WL_IDLE_STATUS;
 WiFiClient client;
 boolean bSendData = false;
 
-char server[] = "rhinodream.com";
+//char server[] = "rhinodream.com";
+IPAddress server(54,249,149,48);
 
 unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
 boolean lastConnected = false;                  // state of the connection last time through the main loop
@@ -80,7 +87,7 @@ boolean bDataUsing = false;
 int second = 0, minutes = 0;
 
 //pedometer
-char* SERIAL_NUMBER = "11111111";
+char* SERIAL_NUMBER = "hm1";
 
 unsigned int pedoCnt = 0;
 unsigned int activeCnt = 0;
@@ -172,7 +179,7 @@ void startSetup() {
     Serial.println("Init DB failed!");
     while(true);
   }
-//  data.setCalendar(2013, 4, 21, 11, 00);
+
   Serial.println("Init DB done.");
   
   //try wifi connect
@@ -187,12 +194,19 @@ void startSetup() {
   readHTTPResponse(httpBuf);
   disconnectServer();
   
+  //DEBUG
+//  Serial.println();
+//  Serial.println(httpBuf);
+//  Serial.println();
+  
   readLineTo(httpBuf, bufLine, 0);
   if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
-    readLineTo(httpBuf, bufLine, 9);
+    readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
     Serial.print("Init Date : ");
-    Serial.println(bufLine);
+    Serial.print(bufLine);
     updateCalendar(bufLine);
+//    data.setCalendar(2013, 5, 19, 19, 38);  //DEBUG
+    Serial.println(" ..... done.");
   } else {
     Serial.println("Init WiFi, Time failed!");
     while(true);

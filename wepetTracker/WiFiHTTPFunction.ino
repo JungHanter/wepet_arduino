@@ -1,5 +1,6 @@
 void disconnectServer() {
   if (!client.connected()) {
+    client.flush();
     client.stop();
   }
 }
@@ -41,13 +42,18 @@ boolean httpRequest_sendLocation(const float& lat, const float& lon) {
   sprintf(vBuf, "%10.6f", lon);
   strcat(buf, vBuf);
   
+  dataSize = strlen(buf);
   
   // if there's a successful connection:
   if (client.connect(server, 80)) {
-    Serial.println("connecting...SendActivity...");
+    Serial.println("connecting...SendLocation...");
+    
+    //DEBUG
+    Serial.print("data : ");
+    Serial.println(buf);
 
-    client.println("POST /tracker/location/ HTTP/1.1");
-    client.println("Host: rhinodream.com");
+    client.println("POST /hw/tracker/location/ HTTP/1.1");
+    client.println("Host: 54,249,149,48");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -74,17 +80,15 @@ boolean httpRequest_sendActivity() {
   
 //  char buf[192], vBuf[32];
   char buf[128], vBuf[32];
+  char latbuf[16], lonbuf[16];
   buf[0] = '0';
   
   strcpy(buf, "serial_number=");
   strcat(buf, SERIAL_NUMBER);
   
-  strcat(buf, "&start_time=");
+  strcat(buf, "&date_time=");
   data.getStartTimeStr(vBuf);
   strcat(buf, vBuf);
-  
-  strcat(buf, "&end_time=");
-  strcat(buf, nowCalendar.getCaledarStr(vBuf));
   
   int hour, minute;
   strcat(buf, "&time=");
@@ -96,20 +100,26 @@ boolean httpRequest_sendActivity() {
   sprintf(vBuf, "%lu", activityDist);
   strcat(buf, vBuf);
   
-  dataSize = (unsigned long)strlen(buf) + (unsigned long)(data.getRecordNum())*22;
+  //24 -> -xxx.xxxxxx,-xxx.xxxxxx/
+  dataSize = (unsigned long)strlen(buf) + (unsigned long)(data.getRecordNum())*24 + 1;
   
   // if there's a successful connection:
   if (client.connect(server, 80)) {
-    Serial.println("connecting...SendActivity...");
+    Serial.println("connecting...!SendActivity...");
+    
+    //DEBUG
+    Serial.print("data_header : ");
+    Serial.println(buf);
 
-    client.println("POST /tracker/activity/ HTTP/1.1");
-    client.println("Host: rhinodream.com");
+    client.println("POST /hw/tracker/activity/ HTTP/1.1");
+    client.println("Host: 54,249,149,48");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
     client.print("Content-Length: ");
     client.println(dataSize);
     client.println();
     client.print(buf);
+    Serial.print(6);
     
     //locations 전송해야함
     boolean bEnd = false;
@@ -120,11 +130,18 @@ boolean httpRequest_sendActivity() {
         bEnd = true;
       }
       
-      sprintf(buf, "%10.6f,%10.6f/", lat, lon);
-      client.print(buf);
+      //DEBUG
+      Serial.print(7);
+      sprintf(buf, "%11.6f,%11.6f/", lat, lon);
+      client.print(buf); //not
+      Serial.print(8);
+      Serial.print(' ');
+      Serial.print(buf);
+      Serial.print('/');
       
       if(bEnd) break;
     }
+    client.print('\0');
     
     // note the time that the connection was made:
     lastConnectionTime = millis();
@@ -140,15 +157,27 @@ boolean httpRequest_sendActivity() {
   }
 }
 
-boolean httpRequest_getTime() {
+boolean httpRequest_getSettings() {
+  unsigned long dataSize = 0;
+  char buf[128];
+  buf[0] = '0';
+  
+  strcpy(buf, "serial_number=");
+  strcat(buf, SERIAL_NUMBER);
+  
+  dataSize = strlen(buf);
+  
   if (client.connect(server, 80)) {
     Serial.println("connecting...GetTime...");
 
-    client.println("POST /time_test/ HTTP/1.1");
-    client.println("Host: rhinodream.com");
+    client.println("POST /hw/tracker/safe_zone_info/ HTTP/1.1");
+    client.println("Host: 54,249,149,48");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
+    client.print("Content-Length: ");
+    client.println(dataSize);
     client.println();
+    client.println(buf);
     
     // note the time that the connection was made:
     lastConnectionTime = millis();

@@ -1,3 +1,12 @@
+void readPrintHttpResponse() {
+  while(!client.available());
+  
+  while(client.available()) {
+    char c = client.read();
+    Serial.write(c);
+  }
+}
+
 int readHTTPResponse(char* buf) {
   while(!client.available());  //wait for client socket
   
@@ -7,6 +16,12 @@ int readHTTPResponse(char* buf) {
   while (client.available()) {
     buf[i] = client.read();
     i++;
+    
+    if(i >= (HTTP_BUF_SIZE-1) ) {
+      i = HTTP_BUF_SIZE-1;
+      client.flush();
+      break;
+    }
   }
   buf[i] = '\0';
   
