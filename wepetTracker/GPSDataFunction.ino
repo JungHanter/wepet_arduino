@@ -1,24 +1,10 @@
-void printGPS(float& flat, float& flon, unsigned long& age, TinyGPS& gps) {
-  unsigned long chars;
-  unsigned short sentences, failed;
-  
+void printGPS(float& flat, float& flon, unsigned short failed) {
   Serial.print("LAT=");
-  Serial.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
-  Serial.print(" LON=");
-  Serial.print(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
-  Serial.print(" SAT=");
-  Serial.print(gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites());
-  Serial.print(" PREC=");
-  Serial.print(gps.hdop() == TinyGPS::GPS_INVALID_HDOP ? 0 : gps.hdop());
-  
-  gps.stats(&chars, &sentences, &failed);
-  Serial.print(" CHARS=");
-  Serial.print(chars);
-  Serial.print(" SENTENCES=");
-  Serial.print(sentences);
-  Serial.print(" CSUM ERR=");
+  Serial.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 1000.0 : flat, 6);
+  Serial.print(" / LON=");
+  Serial.print(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 1000.0 : flon, 6);    
+  Serial.print(" / FAILED=");
   Serial.println(failed);
-    
 }
 
 
@@ -132,7 +118,7 @@ void updateCalendar(const char* strCalendar) {
   while(true) {
     switch (stat) {
     case 0:     //year
-      if(strCalendar[pos] == '/') {
+      if(strCalendar[pos] == ',') {
         chYear[chPos] = '\0';
 
         stat = 1;
@@ -144,7 +130,7 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 1:     //month
-      if(strCalendar[pos] == '/') {
+      if(strCalendar[pos] == ',') {
         chMonth[chPos] = '\0';
 
         stat = 2;
@@ -156,7 +142,7 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 2:     //day
-      if(strCalendar[pos] == ' ') {
+      if(strCalendar[pos] == ',') {
         chDay[chPos] = '\0';
 
         stat = 3;
@@ -168,7 +154,7 @@ void updateCalendar(const char* strCalendar) {
       }
       break;
     case 3:     //hour
-      if(strCalendar[pos] == ':') {
+      if(strCalendar[pos] == ',') {
         chHour[chPos] = '\0';
 
         stat = 4;
@@ -197,6 +183,7 @@ void updateCalendar(const char* strCalendar) {
       bDataUsing = true;
       data.setCalendar(atoi(chYear), atoi(chMonth), atoi(chDay), atoi(chHour), atoi(chMinute));
       bDataUsing = false;
+     
       return;
     }
 

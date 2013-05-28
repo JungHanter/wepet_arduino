@@ -179,7 +179,7 @@ void startSetup() {
     Serial.println("Init DB failed!");
     while(true);
   }
-  data.reset();
+
   Serial.println("Init DB done.");
   
   //try wifi connect

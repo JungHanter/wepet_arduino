@@ -1,6 +1,4 @@
 void sendAllPedoData() {
-  Serial.println("SendAllPedoData");
-  
   PedoData::Page page;
   int link = -1;
   
@@ -15,22 +13,11 @@ void sendAllPedoData() {
       return;
     } 
     else {
-      boolean bSended = false;
-      
-      for(int i=0; i<5; i++) {
-        if(bSended = sendPage(page)) {
-          break;
-        }
-      }
-      
-      if(bSended) {
-        while(bDataUsing);
-        bDataUsing=true;
-        data.setPageUnused(page);
-        bDataUsing=false;
-      } else {
-        Serial.println("Send Page failure...");
-      }
+      while(!sendPage(page));
+      while(bDataUsing);
+      bDataUsing=true;
+      data.setPageUnused(page);
+      bDataUsing=false;
     }
 
   } 
@@ -203,8 +190,6 @@ void updateCalendar(const char* strCalendar) {
       bDataUsing = true;
       data.setCalendar(atoi(chYear), atoi(chMonth), atoi(chDay), atoi(chHour), atoi(chMinute));
       bDataUsing = false;
-      
-      minutes = atoi(chMinute) -1;
       return;
     }
 
@@ -228,43 +213,18 @@ void transHTTPData(const char* serialNum, PedoData::Page& page, char* buf, int* 
     strcat(buf, getPageTime(page, vBuf));
 
     getPageSteps(page, stepArr, &stepNum);
-    int startMin = ((int)(page.header.hhmm)%100)/10;
-//    startMin = startMin - (startMin%10)  //remove 1 minutes measure
-    
-    int stepValue, stepCnt = 0; 
     strcat(buf, "&step=");
-    for(int i=0; i<6; i++) {
-      if(startMin > i ) {
-        stepValue = 0;
-      } else {  //startMin <= i
-        if(stepCnt < stepNum) {
-          stepValue = stepArr[stepCnt];
-        } else {
-          stepValue = 0;
-        }
-        stepCnt++;
-      }
-      
-      if(i==0) sprintf(vBuf, "%d", stepValue);
-      else sprintf(vBuf, ",%d", stepValue);
-      strcat(buf, vBuf);
+    for(int i=0; i<stepNum; i++) {
+        if(i==0) sprintf(vBuf, "%d", stepArr[i]);
+        else sprintf(vBuf, ",%d", stepArr[i]);
+        strcat(buf, vBuf);
     }
-    
-    //original
-    /*for(int i=0; i<stepNum; i++) {
-      if(i==0) sprintf(vBuf, "%d", stepArr[i]);
-      else sprintf(vBuf, ",%d", stepArr[i]);
-      strcat(buf, vBuf);
-    }*/
     
     strcat(buf, "&active=");
     sprintf(vBuf, "%d", getPageActives(page));
     strcat(buf, vBuf);
     
     *bufSize = (int)strlen(buf);
-    
-    Serial.println("transData:");
-    Serial.println(buf);
 }
 
 const char* getPageDate(PedoData::Page& page, char* buf) {
@@ -285,8 +245,7 @@ const char* getPageTime(PedoData::Page& page, char* buf) {
 
   strTime += (int)((page.header.hhmm)/100);
   strTime += ',';
-//  strTime += (int)((page.header.hhmm)%100);
-  strTime += '0';
+  strTime += (int)((page.header.hhmm)%100);
 
   strTime.toCharArray(buf, CHAR_BUF_SIZE);
   return buf;

@@ -3,7 +3,6 @@
 
 #include <WiFi.h>
 
-//#include <SoftwareSerial.h>
 #include <TinyGPS.h>
 
 #include <MyCalendar.h>
@@ -26,14 +25,10 @@
 #define SERVER_DATA_LINE_NUM 8
 #define HTTP_BUF_SIZE 512
 
-//init RX2 / TX3
-//#define RXPIN 2
-//#define TXPIN 3
-
 void startSetup();
 void checkString(String& input);
 
-void printGPS(float& flat, float& flon, unsigned long& age, TinyGPS& gps);
+void printGPS(float& flat, float& flon, unsigned short failed);
 float calcDistance(float lat1, float long1, float lat2, float long2);
 boolean setSettings(const char* buf);
 
@@ -51,6 +46,7 @@ void disconnectServer();
 boolean httpRequest_sendLocation(const float& lat, const float& lon);
 boolean httpRequest_sendActivity();
 boolean httpRequest_getSettings();
+boolean httpRequest_getTime();
 void printWifiStatus();
 
 void checkGPS();
@@ -59,10 +55,10 @@ void timer_sec();
 boolean bSetup = false;
 
 //Wifi
-//char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
-//char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
-char ssid[] = "mr100"; //  your network SSID (name) 
-char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
+char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
+char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "mr100"; //  your network SSID (name) 
+//char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int wifiStatus = WL_IDLE_STATUS;
@@ -105,8 +101,12 @@ TinyGPS gps;
 float homeLat = TinyGPS::GPS_INVALID_F_ANGLE;
 float homeLong = TinyGPS::GPS_INVALID_F_ANGLE;
 int safeDist = 500;
+unsigned short failed;
 boolean bInSafe = true;
 boolean bActivity = false;
+boolean bFirstSafeOut = false;
+//char safeOutStatus = 0;  //0=in, 1=firstOut, 2=continuosOut
+unsigned long dueTime = 0;
 
 unsigned long activityDist = 0;
 float latitude = 37.503419f, oldLatitude = 37.503419f;
@@ -122,7 +122,7 @@ void timer_sec() {
   digitalWrite(LED8, HIGH);
   
   timer_count++;
-    if(timer_count == CYCLESEC_LCM) {
+  if(timer_count == CYCLESEC_LCM) {
     timer_count = 0;
   }
   
@@ -130,35 +130,26 @@ void timer_sec() {
   if(second == 60) {
     second = 0;
     nowCalendar.addMinute();
+    dueTime++;
   }
   
-  oldLatitude = latitude;
-  oldLongitude = longitude;
-  /*if(Serial1.available()) {
-    char c = Serial1.read();
-    if(gps.encode(c)) {
-      gps.f_get_position(&latitude, &longitude, &age);
-    }
-    printGPS(latitude, longitude, age, gps);
-  } else {
-    Serial.println("GPS is not available");
-  }*/
-  //test move data
-  latitude += ( (float)(random(-200,200)) / 1000000.f );
-  longitude += ( (float)(random(-200,200)) / 1000000.f );
-  
-  if(bDataUsing) return;
+//  if(bDataUsing) return;
 
   bGPSCheck = true;
 }
 
 void checkGPS() {
+  Serial.print("checkGPS... ");
   float nowDist = calcDistance(homeLat, homeLong, latitude, longitude);
   float moveRange = calcDistance(oldLatitude, oldLongitude, latitude, longitude);
   
-  bInSafe = (nowDist <= safeDist);
+  boolean newInSafe = (nowDist <= safeDist);
+  if( newInSafe == false && bInSafe == true) {
+    bFirstSafeOut = true;
+  }
+  bInSafe = newInSafe;
   
-  //  printGPS(latitude, longitude, age, gps);
+  //  printGPS(latitude, longitude, failed);
   Serial.print("(");
   Serial.print(timer_count);
   Serial.print(")nowDist : ");
@@ -166,8 +157,12 @@ void checkGPS() {
   Serial.print(", ");
   Serial.print(latitude, 6);
   Serial.print("/");
-  Serial.println(longitude, 6);
-    
+  Serial.print(longitude, 6);
+  Serial.print(" / failed=");
+  Serial.println(failed);
+  
+  while(bDataUsing);
+  
   if(nowDist > HOME_RADIUS) {
     while(bDataUsing);
     bDataUsing = true;
@@ -176,11 +171,14 @@ void checkGPS() {
       data.setCalendar(nowCalendar);
       data.startActivity();
       Serial.println("start act");
+      dueTime = 0L;
     }
     
 //    if(moveRange >= MOVERANGE) {
+      
       if(timer_count % CYCLESEC_RECORD == 0) {
         data.writeGPS(latitude, longitude);
+        activityDist += moveRange;
         Serial.println("Record");
       }
       
@@ -191,8 +189,8 @@ void checkGPS() {
           lastConnected = client.connected();
           disconnectServer();
           
-          readPrintHttpResponse();
           Serial.println("GPS pos tr");
+//          readPrintHttpResponse();
         }
       } else {
         if(timer_count % CYCLESEC_OUTSAFE == 0) {
@@ -201,8 +199,10 @@ void checkGPS() {
           lastConnected = client.connected();
           disconnectServer();
           
-          readPrintHttpResponse();
           Serial.println("GPS pos tr out");
+//          readPrintHttpResponse();
+          
+          bFirstSafeOut = false;
         }
       }
 //    }
@@ -236,10 +236,11 @@ void checkGPS() {
       data.readDone();
       bDataUsing = false;
       
+      activityDist = 0;
+      dueTime = 0L;
       bActivity = false;
     }
   }
-  
 }
 
 void startSetup() {
@@ -255,14 +256,14 @@ void startSetup() {
     Serial.println("Init DB failed!");
     while(true);
   }
-  nowCalendar.setCalendar(2013, 4, 21, 11, 07);
-  data.setCalendar(nowCalendar);
+//  nowCalendar.setCalendar(2013, 4, 21, 11, 07);
+//  data.setCalendar(nowCalendar);
   Serial.println("Init DB done.");
   
   //try wifi connect for init time
   connectWiFi(true);
   
-  if(!httpRequest_getSettings()) {
+  if(!httpRequest_getTime()) {
     Serial.println("init time httpRequest fail...");
     while(true);
   }
@@ -272,6 +273,8 @@ void startSetup() {
   readHTTPResponse(httpBuf);
   disconnectServer();
   
+//  Serial.println(httpBuf);
+  
   readLineTo(httpBuf, bufLine, 0);
   if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
     readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
@@ -279,34 +282,49 @@ void startSetup() {
     Serial.print(bufLine);
     updateCalendar(bufLine);
 //    data.setCalendar(2013, 5, 19, 19, 38);  //DEBUG
+    nowCalendar = data.getCalendar();
     Serial.println(" ..... done.");
   } else {
     Serial.println("Init WiFi, Time failed!");
     while(true);
   }
   
+  /*** settings ***/
   if(!httpRequest_getSettings()) {
-    Serial.println("init time httpRequest fail...");
+    Serial.println("init settings httpRequest fail...");
     while(true);
   }
   lastConnected = client.connected();
   
-  readPrintHttpResponse();
-  
-  /*char bufLine[128];
   readHTTPResponse(httpBuf);
   disconnectServer();
   
+//  Serial.println("*************settings");
+//  Serial.println(httpBuf);
+  
   readLineTo(httpBuf, bufLine, 0);
   if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
-    readLineTo(httpBuf, bufLine, 9);
-    Serial.print("Init Date : ");
+    readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
+    Serial.print("read Setting Data : ");
     Serial.println(bufLine);
-    updateCalendar(bufLine);
+
+    setSettings(bufLine);
+    Serial.print("settings : ");
+    Serial.print(homeLat, 6);
+    Serial.print('/');
+    Serial.print(homeLong, 6);
+    Serial.print(" / ");
+    Serial.print(safeDist);
+
+    Serial.println(" ..... done.");
   } else {
-    Serial.println("Init WiFi, Time failed!");
+    Serial.println("Init WiFi, Settings failed!");
     while(true);
-  }*/
+  }
+  
+  //init lat/long
+  latitude = homeLat;
+  longitude = homeLong;
   
   randomSeed(millis());
     
@@ -366,8 +384,6 @@ void setup()
 
 void loop()
 {
-  delay(LOOP_DELAY);
-  
   //request-response
   if (stringComplete) {
     checkString(inputString);
@@ -390,11 +406,48 @@ void loop()
     digitalWrite(LED8, LOW);
   }
   
-  if(bGPSCheck) {
-    bGPSCheck = false;
-    checkGPS();
+  oldLatitude = latitude;
+  oldLongitude = longitude;
+  
+  
+  boolean newData = false;
+  unsigned long start = millis();
+  while (millis() - start < 1000)
+  {
+    while (Serial1.available())
+    {
+      if (gps.encode(Serial1.read()))
+        newData = true;
+    }
   }
   
+  if(newData) {
+    float flat, flon;
+    unsigned long age;
+    unsigned long chars;
+    unsigned short sentences;
+    gps.f_get_position(&flat, &flon, &age);
+    gps.stats(&chars, &sentences, &failed);
+    
+    if(flat == TinyGPS::GPS_INVALID_F_ANGLE || flon == TinyGPS::GPS_INVALID_F_ANGLE) {
+      //위경도 변화없음
+      failed = 100;
+    } else {
+      latitude = flat;
+      longitude = flon;
+    }
+  } else {
+    //위경도 변화없음
+    failed = 100;
+  }
+
+  
+  //test move data
+//  delay(1000);
+//  latitude += ( (float)(random(-200,200)) / 1000000.f );
+//  longitude += ( (float)(random(-200,200)) / 1000000.f );
+  
+  checkGPS();
 }
 
 void serialEvent() {
