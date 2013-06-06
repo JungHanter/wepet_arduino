@@ -86,7 +86,7 @@ MyCalendar nowCalendar;
 boolean bDataUsing = false;
 
 //gps
-char* SERIAL_NUMBER = "ht1";
+char* SERIAL_NUMBER = "ht2";
 
 TinyGPS gps;
 //SoftwareSerial uart_gps(RXPIN, TXPIN);
@@ -190,7 +190,7 @@ void checkGPS() {
           disconnectServer();
           
           Serial.println("GPS pos tr");
-//          readPrintHttpResponse();
+          readPrintHttpResponse();
         }
       } else {
         if(timer_count % CYCLESEC_OUTSAFE == 0) {
@@ -200,7 +200,7 @@ void checkGPS() {
           disconnectServer();
           
           Serial.println("GPS pos tr out");
-//          readPrintHttpResponse();
+          readPrintHttpResponse();
           
           bFirstSafeOut = false;
         }
@@ -244,6 +244,8 @@ void checkGPS() {
 }
 
 void startSetup() {
+  if(bSetup) return;
+  
   //SD Card
   pinMode(10, OUTPUT);
   if (!SD.begin(4)) {  //use digital-pin 4,10,11,12,13
@@ -273,7 +275,7 @@ void startSetup() {
   readHTTPResponse(httpBuf);
   disconnectServer();
   
-//  Serial.println(httpBuf);
+  Serial.println(httpBuf);
   
   readLineTo(httpBuf, bufLine, 0);
   if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
@@ -282,7 +284,7 @@ void startSetup() {
     Serial.print(bufLine);
     updateCalendar(bufLine);
 //    data.setCalendar(2013, 5, 19, 19, 38);  //DEBUG
-    nowCalendar = data.getCalendar();
+//    nowCalendar = data.getCalendar();
     Serial.println(" ..... done.");
   } else {
     Serial.println("Init WiFi, Time failed!");
@@ -379,6 +381,9 @@ void setup()
   digitalWrite(LED8, LOW);
 
   Serial.println("waiting for setup...");
+  
+  delay(500);
+  startSetup();
 }
 
 
@@ -409,7 +414,7 @@ void loop()
   oldLatitude = latitude;
   oldLongitude = longitude;
   
-  
+  /*
   boolean newData = false;
   unsigned long start = millis();
   while (millis() - start < 1000)
@@ -439,13 +444,13 @@ void loop()
   } else {
     //위경도 변화없음
     failed = 100;
-  }
+  }*/
 
   
   //test move data
-//  delay(1000);
-//  latitude += ( (float)(random(-200,200)) / 1000000.f );
-//  longitude += ( (float)(random(-200,200)) / 1000000.f );
+  delay(1000);
+  latitude += ( (float)(random(-200,200)) / 1000000.f );
+  longitude += ( (float)(random(-200,200)) / 1000000.f );
   
   checkGPS();
 }

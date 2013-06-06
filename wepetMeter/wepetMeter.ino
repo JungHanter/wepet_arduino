@@ -4,6 +4,7 @@
 #include <WiFi.h>
 
 #include <MyCalendar.h>
+#include <MyVector.h>
 #include <PedoDataFile.h>
 
 #define ARDUINO_DUE_  //if arudino due
@@ -62,10 +63,10 @@ void timer_hour();
 boolean bSetup = false;
 
 //Wifi
-char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
-char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
-//char ssid[] = "mr100"; //  your network SSID (name) 
-//char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
+//char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
+char ssid[] = "mr100"; //  your network SSID (name) 
+char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int wifiStatus = WL_IDLE_STATUS;
@@ -87,7 +88,7 @@ boolean bDataUsing = false;
 int second = 0, minutes = 0;
 
 //pedometer
-char* SERIAL_NUMBER = "hm1";
+char* SERIAL_NUMBER = "hm2";
 
 unsigned int pedoCnt = 0;
 unsigned int activeCnt = 0;
@@ -129,7 +130,7 @@ void timer_sec() {
   bActive = false;
 
   second++;
-  if(second == 3) {
+  if(second == 10) {
     timer_min();
     second = 0;
   }
@@ -166,6 +167,8 @@ void timer_hour() {
 }
 
 void startSetup() {
+  if(bSetup) return;
+  
   //SD Card
   pinMode(10, OUTPUT);
   if (!SD.begin(4)) {  //use digital-pin 4,10,11,12,13
@@ -262,7 +265,9 @@ void setup() {
   digitalWrite(LED8, LOW);
   
   Serial.println("waiting for setup...");
-  //startSetup();
+  
+  delay(500);
+  startSetup();
 }
 
 // the loop routine runs over and over again forever:

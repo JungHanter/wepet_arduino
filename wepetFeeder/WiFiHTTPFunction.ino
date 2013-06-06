@@ -1,7 +1,6 @@
 void disconnectServer() {
-  client.flush();
-  
   if (!client.connected()) {
+    client.flush();
     client.stop();
   }
 }
@@ -24,159 +23,9 @@ boolean connectWiFi(boolean bFirst) {
   return true;
 }
 
-boolean httpRequest_sendLocation(const float& lat, const float& lon) {
+boolean httpRequest_polling() {
   unsigned long dataSize = 0;
-  char buf[192], vBuf[32];
-  buf[0] = '0';
-  
-  strcpy(buf, "serial_number=");
-  strcat(buf, SERIAL_NUMBER);
-  
-  strcat(buf, "&date_time=");
-//  strcat(buf, "2013,5,28,21,49");
-  strcat(buf, nowCalendar.getCaledarStr(vBuf));
-  
-  strcat(buf, "&latitude=");
-  sprintf(vBuf, "%.6f", lat);
-  strcat(buf, vBuf);
-  
-  strcat(buf, "&longitude=");
-  sprintf(vBuf, "%.6f", lon);
-  strcat(buf, vBuf);
-  
-  strcat(buf, "&safe_zone=");
-  if(bFirstSafeOut)
-    strcat(buf, "0");
-  else
-    strcat(buf, "1");
-  
-  dataSize = strlen(buf);
-  
-  // if there's a successful connection:
-  Serial.println("connecting...SendLocation...");
-  if (client.connect(server, 80)) {
-    
-    //DEBUG
-    Serial.print("data(");
-    Serial.print(dataSize);
-    Serial.print(") : ");
-    Serial.println(buf);
-
-    client.println("POST /hw/tracker/location/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
-    client.println("User-Agent: WepetTracker");
-    client.println("Connection: close");
-    client.print("Content-Length: ");
-    client.println(dataSize);
-    client.println();
-    client.println(String(buf));
-    
-    // note the time that the connection was made:
-    lastConnectionTime = millis();
-    Serial.println("done.");
-    return true;
-  } 
-  else {
-    // if you couldn't make a connection:
-    Serial.println("connection failed");
-    Serial.println("disconnecting.");
-    client.stop();
-    
-    return false;
-  }
-}
-
-boolean httpRequest_sendActivity() {
-  unsigned long dataSize = 0;
-  
-//  char buf[192], vBuf[32];
-  char buf[128], vBuf[32];
-  char latbuf[16], lonbuf[16];
-  buf[0] = '0';
-  
-  strcpy(buf, "serial_number=");
-  strcat(buf, SERIAL_NUMBER);
-  
-  strcat(buf, "&date_time=");
-  data.getStartTimeStr(vBuf);
-  strcat(buf, vBuf);
-//  sprintf(vBuf, "%lu", dueTime);
-//  strcat(buf, vBuf);
-  
-  int hour, minute;
-  strcat(buf, "&time=");
-//  nowCalendar.getElapsedTime(data.getCalendar(), &hour, &minute);
-//  sprintf(vBuf, "%d,%d", hour, minute);
-  sprintf(vBuf, "%lu", dueTime);
-  strcat(buf, vBuf);
-  
-  strcat(buf, "&distance=");
-  sprintf(vBuf, "%lu", activityDist);
-  strcat(buf, vBuf);
-  
-  strcat(buf, "&locations=");
-  
-  //24 -> -xxx.xxxxxx,-xxx.xxxxxx/
-  dataSize = (unsigned long)strlen(buf) + (unsigned long)(data.getRecordNum())*24;
-  
-  // if there's a successful connection:
-  Serial.println("connecting...!SendActivity...");
-  if (client.connect(server, 80)) {
-    
-    //DEBUG
-    Serial.print("data_header : ");
-    Serial.println(buf);
-
-    client.println("POST /hw/tracker/activity/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
-    client.println("User-Agent: WepetTracker");
-    client.println("Connection: close");
-    client.print("Content-Length: ");
-    client.println(dataSize);
-    client.println();
-    client.print(buf);
-//    Serial.print(6);
-    
-    //locations 전송해야함
-    boolean bEnd = false;
-    float lat, lon;
-//    client.print("&locations=");
-    Serial.print("&locations=");
-    while(true) {
-      if(data.readNext(&lat, &lon)) {
-        bEnd = true;
-      }
-      
-      //DEBUG
-//      Serial.print(7);
-      sprintf(buf, "%11.6f,%11.6f/", lat, lon);
-      client.print(buf); //not
-//      Serial.print(8);
-      Serial.print(buf);
-      
-      if(bEnd) break;
-    }
-    
-    client.println();
-    Serial.println();
-    
-    // note the time that the connection was made:
-    lastConnectionTime = millis();
-    return true;
-  } 
-  else {
-    // if you couldn't make a connection:
-    Serial.println("connection failed");
-    Serial.println("disconnecting.");
-    client.stop();
-    
-    return false;
-  }
-}
-
-boolean httpRequest_getSettings() {
-  unsigned long dataSize = 0;
-  char buf[128];
+  char buf[32];
   buf[0] = '0';
   
   strcpy(buf, "serial_number=");
@@ -184,12 +33,11 @@ boolean httpRequest_getSettings() {
   
   dataSize = strlen(buf);
   
-  Serial.println("connecting...GetSettings...");
   if (client.connect(server, 80)) {
     
-    client.println("POST /hw/tracker/safe_zone_info/ HTTP/1.1");
+    client.println("POST /hw/feeder/polling/ HTTP/1.1");
     client.println("Host: 54.249.149.48");
-    client.println("User-Agent: WepetTracker");
+    client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.print("Content-Length: ");
     client.println(dataSize);
@@ -201,8 +49,144 @@ boolean httpRequest_getSettings() {
     return true;
   } else {
     // if you couldn't make a connection:
-    Serial.println("connection failed");
-    Serial.println("disconnecting.");
+    client.stop();
+    return false;
+  }
+}
+
+boolean httpReqeust_changed() {
+  unsigned long dataSize = 0;
+  char buf[64], vBuf[16];
+  buf[0] = '0';
+  
+  strcpy(buf, "serial_number=");
+  strcat(buf, SERIAL_NUMBER);
+  
+  strcat(buf, "&left_quantity=");
+  sprintf(vBuf, "%d", nowFeedWeight);
+  strcat(buf, vBuf);
+  
+  dataSize = strlen(buf);
+  
+  if (client.connect(server, 80)) {
+    
+    client.println("POST /hw/feeder/bowl/ HTTP/1.1");
+    client.println("Host: 54.249.149.48");
+    client.println("User-Agent: WepetFeeder");
+    client.println("Connection: close");
+    client.print("Content-Length: ");
+    client.println(dataSize);
+    client.println();
+    client.println(buf);
+    
+    // note the time that the connection was made:
+    lastConnectionTime = millis();
+    return true;
+  } else {
+    // if you couldn't make a connection:
+    client.stop();
+    return false;
+  }
+}
+
+boolean httpRequest_startEat() {
+  unsigned long dataSize = 0;
+  char buf[128], vBuf[32];
+  buf[0] = '0';
+  
+  strcpy(buf, "serial_number=");
+  strcat(buf, SERIAL_NUMBER);
+  
+  strcat(buf, "&start_time=");
+  strcat(buf, calendar.getCaledarStr(vBuf));
+  
+  dataSize = strlen(buf);
+  
+  Serial.print("connecting...startEat...");
+  if (client.connect(server, 80)) {
+    
+    client.println("POST /hw/feeder/start/ HTTP/1.1");
+    client.println("Host: 54.249.149.48");
+    client.println("User-Agent: WepetFeeder");
+    client.println("Connection: close");
+    client.print("Content-Length: ");
+    client.println(dataSize);
+    client.println();
+    client.println(buf);
+    
+    Serial.print("sendData : ");
+    Serial.println(buf);
+    
+    // note the time that the connection was made:
+    lastConnectionTime = millis();
+    Serial.println("Success");
+    return true;
+  } else {
+    // if you couldn't make a connection:
+    client.stop();
+    Serial.println("failure");
+    return false;
+  }
+}
+
+boolean httpRequest_endEat() {
+  unsigned long dataSize = 0;
+  int gramCnt = feedWeightVector.getSize();
+  char buf[128], vBuf[32];
+  buf[0] = '0';
+  
+  strcpy(buf, "serial_number=");
+  strcat(buf, SERIAL_NUMBER);
+  
+  strcat(buf, "&end_time=");
+  strcat(buf, calendar.getCaledarStr(vBuf));
+  
+  strcat(buf, "&time=");
+  sprintf(vBuf, "%d", feedingTimes);
+  strcat(buf, vBuf);
+  
+  strcat(buf, "&grams=");
+  
+  
+  dataSize = strlen(buf) + ( gramCnt*4 -1 );  //comma + %3d
+  
+  Serial.print("connecting...endEat...");
+  if (client.connect(server, 80)) {
+    
+    client.println("POST /hw/feeder/end/ HTTP/1.1");
+    client.println("Host: 54.249.149.48");
+    client.println("User-Agent: WepetFeeder");
+    client.println("Connection: close");
+    client.print("Content-Length: ");
+    client.println(dataSize);
+    client.println();
+    client.print(buf);
+    
+    
+    //debugging
+    Serial.print("senddata : ");
+    Serial.print(buf);
+    
+    //send grams...
+    sprintf(vBuf, "%3d", feedWeightVector.getItem(0));
+    client.print(vBuf);
+    Serial.print(vBuf);
+    
+    for(int i=1; i<gramCnt; i++) {
+      sprintf(vBuf, ",%3d", feedWeightVector.getItem(i));
+      client.print(vBuf);
+      Serial.print(vBuf);
+    }
+    client.println();
+    Serial.println();
+    
+    // note the time that the connection was made:
+    Serial.println("done.");
+    lastConnectionTime = millis();
+    return true;
+  } else {
+    // if you couldn't make a connection:
+    Serial.println("failure.");
     client.stop();
     return false;
   }
@@ -214,7 +198,7 @@ boolean httpRequest_getTime() {
     
     client.println("POST /hw/time/now/ HTTP/1.1");
     client.println("Host: 54.249.149.48");
-    client.println("User-Agent: WepetTracker");
+    client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.println();
     
@@ -248,4 +232,3 @@ void printWifiStatus() {
   Serial.print(rssi);
   Serial.println(" dBm");
 }
-

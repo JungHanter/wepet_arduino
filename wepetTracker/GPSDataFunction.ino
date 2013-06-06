@@ -124,7 +124,7 @@ void updateCalendar(const char* strCalendar) {
         stat = 1;
         nowCh = chMonth;
         chPos = 0;
-      } 
+      }
       else {
         chYear[chPos++] = strCalendar[pos];
       }
@@ -181,7 +181,7 @@ void updateCalendar(const char* strCalendar) {
     if(bFinish) {
       while(bDataUsing);
       bDataUsing = true;
-      data.setCalendar(atoi(chYear), atoi(chMonth), atoi(chDay), atoi(chHour), atoi(chMinute));
+      nowCalendar.setCalendar(atoi(chYear), atoi(chMonth), atoi(chDay), atoi(chHour), atoi(chMinute));
       bDataUsing = false;
      
       return;
