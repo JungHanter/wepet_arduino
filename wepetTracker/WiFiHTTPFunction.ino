@@ -63,7 +63,7 @@ boolean httpRequest_sendLocation(const float& lat, const float& lon) {
     Serial.println(buf);
 
     client.println("POST /hw/tracker/location/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: 54.249.125.244");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -128,7 +128,7 @@ boolean httpRequest_sendActivity() {
     Serial.println(buf);
 
     client.println("POST /hw/tracker/activity/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: 54.249.125.244");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -188,7 +188,7 @@ boolean httpRequest_getSettings() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/tracker/safe_zone_info/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: 54.249.125.244");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -213,7 +213,7 @@ boolean httpRequest_getTime() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/time/now/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: 54.249.125.244");
     client.println("User-Agent: WepetTracker");
     client.println("Connection: close");
     client.println();

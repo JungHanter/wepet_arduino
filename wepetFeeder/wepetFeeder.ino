@@ -86,6 +86,8 @@ char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name)
 char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
 //char ssid[] = "mr100"; //  your network SSID (name) 
 //char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "AndroidHotspot6790"; //  your network SSID (name) 
+//char pass[] = "tpwlssla";    // your network password (use for WPA, or use as key for WEP)
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int wifiStatus = WL_IDLE_STATUS;
@@ -93,7 +95,7 @@ int wifiStatus = WL_IDLE_STATUS;
 WiFiClient client;
 
 //char server[] = "rhinodream.com";
-IPAddress server(54,249,149,48);
+IPAddress server(54,249,125,244);
 
 unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
 boolean lastConnected = false;                  // state of the connection last time through the main loop

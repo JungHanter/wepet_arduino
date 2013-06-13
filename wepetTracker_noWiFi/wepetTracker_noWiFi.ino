@@ -1,8 +1,6 @@
 #include <SPI.h>
 #include <SD.h>
 
-#include <WiFi.h>
-
 #include <TinyGPS.h>
 
 #include <MyCalendar.h>
@@ -32,47 +30,11 @@ void printGPS(float& flat, float& flon, unsigned short failed);
 float calcDistance(float lat1, float long1, float lat2, float long2);
 boolean setSettings(const char* buf);
 
-char httpBuf[HTTP_BUF_SIZE];
-int httpBufCnt = 0;
-void readPrintHttpResponse();
-int readHTTPResponse(char* buf);
-boolean readLine(const char* src, char* dest);
-const char* readLineTo(const char* src, char* dest, int lineNum);
-
-void updateCalendar(const char* strCalendar);
-
-boolean connectWiFi(boolean bFirst);
-void disconnectServer();
-boolean httpRequest_sendLocation(const float& lat, const float& lon);
-boolean httpRequest_sendActivity();
-boolean httpRequest_getSettings();
-boolean httpRequest_getTime();
-void printWifiStatus();
-
 void checkGPS();
 void timer_sec();
 
 boolean bSetup = false;
 
-//Wifi
-char ssid[] = "AndroidHotspot6790"; //  your network SSID (name) 
-char pass[] = "tpwlssla";    // your network password (use for WPA, or use as key for WEP)
-//char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
-//char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
-//char ssid[] = "mr100"; //  your network SSID (name) 
-//char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
-int keyIndex = 0;            // your network key Index number (needed only for WEP)
-
-int wifiStatus = WL_IDLE_STATUS;
-
-WiFiClient client;
-
-//char server[] = "rhinodream.com";
-IPAddress server(54,249,125,244);
-
-unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
-boolean lastConnected = false;                  // state of the connection last time through the main loop
-const unsigned long postingInterval = 20*1000;  // delay between updates, in milliseconds
 
 String inputString = String();         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
@@ -144,7 +106,6 @@ void checkGPS() {
   Serial.print("checkGPS... ");
   float nowDist = calcDistance(homeLat, homeLong, latitude, longitude);
   float moveRange = calcDistance(oldLatitude, oldLongitude, latitude, longitude);
-  boolean bSuccess = false;
   
   boolean newInSafe = (nowDist <= safeDist);
   if( newInSafe == false && bInSafe == true) {
@@ -157,8 +118,6 @@ void checkGPS() {
   Serial.print(timer_count);
   Serial.print(")nowDist : ");
   Serial.print(nowDist);
-  Serial.print(", moveRange : ");
-  Serial.print(moveRange);
   Serial.print(", ");
   Serial.print(latitude, 6);
   Serial.print("/");
@@ -179,42 +138,31 @@ void checkGPS() {
       dueTime = 0L;
     }
     
-    if(moveRange >= MOVERANGE) {
+//    if(moveRange >= MOVERANGE) {
       
       if(timer_count % CYCLESEC_RECORD == 0) {
         data.writeGPS(latitude, longitude);
         activityDist += moveRange;
-        oldLatitude = latitude;
-        oldLongitude = longitude;
         Serial.println("Record");
       }
       
       if(bInSafe) {
-        if(timer_count % CYCLESEC_INSAFE == 0 && WiFi.status()==WL_CONNECTED) {
+        if(timer_count % CYCLESEC_INSAFE == 0) {
           //위치전송
-          bSuccess = httpRequest_sendLocation(latitude, longitude);
-          lastConnected = client.connected();
-          disconnectServer();
           
           Serial.println("GPS pos tr");
-          if(bSuccess & WiFi.status()==WL_CONNECTED) readPrintHttpResponse();
-          
         }
       } else {
-        if(timer_count % CYCLESEC_OUTSAFE == 0 && WiFi.status()==WL_CONNECTED) {
+        if(timer_count % CYCLESEC_OUTSAFE == 0) {
           //위치전송
-          bSuccess = httpRequest_sendLocation(latitude, longitude);
-          lastConnected = client.connected();
-          disconnectServer();
           
           Serial.println("GPS pos tr out");
-          if(bSuccess && WiFi.status()==WL_CONNECTED) readPrintHttpResponse();
           
           bFirstSafeOut = false;
         }
       }
-    }
-     
+//    }
+    
     bDataUsing =false;
     
   } else {
@@ -228,31 +176,6 @@ void checkGPS() {
       if(data.getRecordNum() > 0) {
         Serial.print("activity data request ... ");
         
-        
-        int bSendCnt = 0;
-        
-        while(true) {
-          if(!httpRequest_sendActivity()) {
-            lastConnected = client.connected();
-            disconnectServer();
-            
-            Serial.println("request fail! again..");
-            
-          } else {
-            lastConnected = client.connected();
-            disconnectServer();
-            
-            Serial.println("success!");
-            
-            readPrintHttpResponse();
-            break;
-          }
-          
-          bSendCnt++;
-          if(bSendCnt >= 5) {
-            break;
-          }
-        }
       } else {
         Serial.println("no data...");
       }
@@ -285,75 +208,17 @@ void startSetup() {
 //  nowCalendar.setCalendar(2013, 4, 21, 11, 07);
 //  data.setCalendar(nowCalendar);
   Serial.println("Init DB done.");
-  
-  //try wifi connect for init time
-  connectWiFi(true);
-  
-  if(!httpRequest_getTime()) {
-    Serial.println("init time httpRequest fail...");
-    while(true);
-  }
-  lastConnected = client.connected();
-  
-  char bufLine[128];
-  readHTTPResponse(httpBuf);
-  disconnectServer();
-  
-  Serial.println(httpBuf);
-  
-  readLineTo(httpBuf, bufLine, 0);
-  if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
-    readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
-    Serial.print("Init Date : ");
-    Serial.print(bufLine);
-    updateCalendar(bufLine);
-//    data.setCalendar(2013, 5, 19, 19, 38);  //DEBUG
-//    nowCalendar = data.getCalendar();
-    Serial.println(" ..... done.");
-  } else {
-    Serial.println("Init WiFi, Time failed!");
-    while(true);
-  }
-  
-  /*** settings ***/
-  if(!httpRequest_getSettings()) {
-    Serial.println("init settings httpRequest fail...");
-    while(true);
-  }
-  lastConnected = client.connected();
-  
-  readHTTPResponse(httpBuf);
-  disconnectServer();
-  
-//  Serial.println("*************settings");
-//  Serial.println(httpBuf);
-  
-  readLineTo(httpBuf, bufLine, 0);
-  if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
-    readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
-    Serial.print("read Setting Data : ");
-    Serial.println(bufLine);
 
-    setSettings(bufLine);
-    Serial.print("settings : ");
-    Serial.print(homeLat, 6);
-    Serial.print('/');
-    Serial.print(homeLong, 6);
-    Serial.print(" / ");
-    Serial.print(safeDist);
-
-    Serial.println(" ..... done.");
-  } else {
-    Serial.println("Init WiFi, Settings failed!");
-    while(true);
-  }
   
-  data.setHomeGPS(homeLat, homeLong);
-  data.setSafeZoneDist(safeDist);
   
-  //init lat/long
-  latitude = oldLatitude = homeLat;
-  longitude = oldLongitude = homeLong;
+  data.setCalendar(2013, 6, 7, 19, 00);  //DEBUG
+  nowCalendar = data.getCalendar();
+  
+  
+  
+  latitude = oldLatitude = homeLat = 37.503419f;
+  longitude = oldLongitude = homeLong = 127.044831f;
+  
   
   randomSeed(millis());
     
@@ -383,12 +248,6 @@ void setup()
   
   delay(100);
     
-  //wifi shield check
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present"); 
-    // don't continue:
-//    while(true);
-  } 
   
   bSetup = false;
   inputString.reserve(100);
@@ -438,8 +297,10 @@ void loop()
     digitalWrite(LED8, LOW);
   }
   
-
-  //read gps
+  oldLatitude = latitude;
+  oldLongitude = longitude;
+  
+  
   boolean newData = false;
   unsigned long start = millis();
   while (millis() - start < 1000)
@@ -473,10 +334,9 @@ void loop()
 
   
   //test move data
-  /*delay(1000);
-  latitude += ( (float)(random(-200,200)) / 1000000.f );
-  longitude += ( (float)(random(-200,200)) / 1000000.f );
-  */
+//  delay(1000);
+//  latitude += ( (float)(random(-200,200)) / 1000000.f );
+//  longitude += ( (float)(random(-200,200)) / 1000000.f );
   
   checkGPS();
 }

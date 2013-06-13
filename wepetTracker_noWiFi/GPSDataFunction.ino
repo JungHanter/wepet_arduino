@@ -100,10 +100,7 @@ boolean setSettings(const char* buf) {
     homeLong = (float)atoi(strLon) - ( (float)atol(strLonF) / (float)pow(10, strlen(strLonF)) );
   else
     homeLong = (float)atoi(strLon) + ( (float)atol(strLonF) / (float)pow(10, strlen(strLonF)) );
-  
-  Serial.print("dist: ");
-  Serial.println(strDist);
-  
+    
   safeDist = atoi(strDist);
   
 }

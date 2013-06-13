@@ -1,9 +1,9 @@
 #include <SPI.h>
 #include <SD.h>
 
-#include <WiFi.h>
 
 #include <MyCalendar.h>
+#include <MyVector.h>
 #include <PedoDataFile.h>
 
 #define ARDUINO_DUE_  //if arudino due
@@ -33,27 +33,11 @@ const char* getPageTime(PedoData::Page& page, char* buf);
 void getPageSteps(PedoData::Page& page, int* arrStep, int* pCount);
 int getPageActives(PedoData::Page& page);
 
-int sendErrorCnt = 0;
-void sendAllPedoData();
 void printAllPedoData();
 void printPage(PedoData::Page& page);
-boolean sendPage(PedoData::Page& page);
-void transHTTPData(const char* serialNum, PedoData::Page& page, char* buf, int* bufSize);
-
-char httpBuf[HTTP_BUF_SIZE];
-int httpBufCnt = 0;
-void readPrintHttpResponse();
-int readHTTPResponse(char* buf);
-boolean readLine(const char* src, char* dest);
-const char* readLineTo(const char* src, char* dest, int lineNum);
 
 void updateCalendar(const char* strCalendar);
 
-boolean connectWiFi(boolean bFirst);
-void disconnectServer();
-boolean httpRequest_sendData(const char* data, int dataSize);
-boolean httpRequest_getTime();
-void printWifiStatus();
 
 void timer_sec();
 void timer_min();
@@ -61,24 +45,6 @@ void timer_hour();
 
 boolean bSetup = false;
 
-//Wifi
-char ssid[] = "Hanter Jung's Hotspot"; //  your network SSID (name) 
-char pass[] = "68287628";    // your network password (use for WPA, or use as key for WEP)
-//char ssid[] = "mr100"; //  your network SSID (name) 
-//char pass[] = "A1234567";    // your network password (use for WPA, or use as key for WEP)
-int keyIndex = 0;            // your network key Index number (needed only for WEP)
-
-int wifiStatus = WL_IDLE_STATUS;
-
-WiFiClient client;
-boolean bSendData = false;
-
-//char server[] = "rhinodream.com";
-IPAddress server(54,249,149,48);
-
-unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
-boolean lastConnected = false;                  // state of the connection last time through the main loop
-const unsigned long postingInterval = 20*1000;  // delay between updates, in milliseconds
 
 //file DB
 PedoData::PedoDataFile data;
@@ -87,7 +53,7 @@ boolean bDataUsing = false;
 int second = 0, minutes = 0;
 
 //pedometer
-char* SERIAL_NUMBER = "hm1";
+char* SERIAL_NUMBER = "hm2";
 
 unsigned int pedoCnt = 0;
 unsigned int activeCnt = 0;
@@ -106,13 +72,6 @@ const int LED8 = 8;
 boolean bOnLED9 = true;
 boolean bOnLED8 = true;
 
-void sendPedo() {
-  PedoData::Page page[10];
-  int pageSize;
-
-  data.readUsingPages(page, &pageSize, 10);
-
-}
 
 //each sec timer interrupt routine (using for decide active/inactive)
 void timer_sec() {
@@ -129,7 +88,7 @@ void timer_sec() {
   bActive = false;
 
   second++;
-  if(second == 3) {
+  if(second == 10) {
     timer_min();
     second = 0;
   }
@@ -161,11 +120,11 @@ void timer_min() {
 
 //each hour timer interrupt routine (using for wifi data transmission)
 void timer_hour() {
-//  sendAllPedoData();
-  bSendData = true;
 }
 
 void startSetup() {
+  if(bSetup) return;
+  
   //SD Card
   pinMode(10, OUTPUT);
   if (!SD.begin(4)) {  //use digital-pin 4,10,11,12,13
@@ -179,38 +138,10 @@ void startSetup() {
     Serial.println("Init DB failed!");
     while(true);
   }
-
+  data.reset();
   Serial.println("Init DB done.");
   
-  //try wifi connect
-  connectWiFi(true);
-  if(!httpRequest_getTime()) {
-    Serial.println("init time httpRequest fail...");
-    while(true);
-  }
-  lastConnected = client.connected();
-  
-  char bufLine[128];
-  readHTTPResponse(httpBuf);
-  disconnectServer();
-  
-  //DEBUG
-//  Serial.println();
-//  Serial.println(httpBuf);
-//  Serial.println();
-  
-  readLineTo(httpBuf, bufLine, 0);
-  if( strcmp(bufLine, "HTTP/1.1 200 OK") ) {
-    readLineTo(httpBuf, bufLine, SERVER_DATA_LINE_NUM);
-    Serial.print("Init Date : ");
-    Serial.print(bufLine);
-    updateCalendar(bufLine);
-//    data.setCalendar(2013, 5, 19, 19, 38);  //DEBUG
-    Serial.println(" ..... done.");
-  } else {
-    Serial.println("Init WiFi, Time failed!");
-    while(true);
-  }
+  data.setCalendar(2013, 6, 7, 19, 0);  
 
   Serial.print("Init timer... ");
 #ifdef ARDUINO_DUE_
@@ -235,13 +166,6 @@ void setup() {
   
   delay(100);
   
-  //wifi shield check
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present"); 
-    // don't continue:
-//    while(true);
-  }
-
   bSetup = false;
   inputString.reserve(100);
   
@@ -262,7 +186,9 @@ void setup() {
   digitalWrite(LED8, LOW);
   
   Serial.println("waiting for setup...");
-  //startSetup();
+  
+  delay(500);
+  startSetup();
 }
 
 // the loop routine runs over and over again forever:
@@ -291,11 +217,6 @@ void loop() {
   }
   
   
-  /**** send Data ****/
-  if(bSendData) {
-    sendAllPedoData();
-    bSendData = false;
-  }
 
   /********** check Step **********/
   // read the input on analog pin 0~2:
@@ -348,8 +269,6 @@ void checkString(String& input) {
   if(input == "setup") {
     Serial.println("setup Pedometer");
     startSetup();
-  } else if (input == "sendAllData") {
-    sendAllPedoData();
   } else if (input == "printAllData") {
     printAllPedoData();
   }

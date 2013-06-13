@@ -6,7 +6,7 @@ void weightChangeTo(int gram, int ms) {
 
 void testFeeding(int gram) {
   if(nowFeedWeight < gram) {
-    nowFeedWeight += random(5,10);
+    nowFeedWeight += random(20,30);
   }
   delay(100);
 }
