@@ -36,7 +36,7 @@ boolean httpRequest_polling() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/feeder/polling/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: www.wepet.net");
     client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -71,7 +71,7 @@ boolean httpReqeust_changed() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/feeder/bowl/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: www.wepet.net");
     client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -106,7 +106,7 @@ boolean httpRequest_startEat() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/feeder/start/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: www.wepet.net");
     client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -154,7 +154,7 @@ boolean httpRequest_endEat() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/feeder/end/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: www.wepet.net");
     client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.print("Content-Length: ");
@@ -197,7 +197,7 @@ boolean httpRequest_getTime() {
   if (client.connect(server, 80)) {
     
     client.println("POST /hw/time/now/ HTTP/1.1");
-    client.println("Host: 54.249.149.48");
+    client.println("Host: www.wepet.net");
     client.println("User-Agent: WepetFeeder");
     client.println("Connection: close");
     client.println();

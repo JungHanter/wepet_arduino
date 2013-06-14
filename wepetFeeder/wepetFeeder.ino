@@ -21,17 +21,24 @@
 #define CYCLESEC_CHECKEAT 5 //5초
 #define CYCLESEC_LCM 5      //최소공배수
 
-#define FEED_NOCHANGED_MAX 6 //5*36=180초 동안 변화 없을시 다 먹음
+#define FEED_NOCHANGED_MAX 36 //5*36=180초 동안 변화 없을시 다 먹음
 #define WEIGHT_EATDONE 20   //0점 조절
 #define WEIGHT_TOLERANCE 10 //오차허용 그램수 (10그램의변화는 무시)
 #define WEIGHT_NEARCLOSE 5 //문 닫기 시작 할 그램 차이
+
+#define LOAD_READING_TIME 100 //ms
+#define LOAD_ANALOG_MAX 789
+#define LOAD_ANALOG_MIN 38
+#define LOAD_WEIGHT_MAX 1000 //g
+#define LOAD_WEIGHT_MIN 0 //g
+static int LOAD_WEIGHT_ZERO = 270;
 
 #define SERVER_DATA_LINE_NUM 8
 #define HTTP_BUF_SIZE 512
 
 static const char* HTTP_OK_STRING="HTTP/1.1 200 OK";
 
-//setup
+//setupxu
 void startSetup();
 void checkString(String& input);
 String inputString = String();     // a string to hold incoming data
@@ -47,6 +54,9 @@ void closeFeeder();
 
 //loadcell
 void readLoadcell();
+float analogToLoad(float analogval);
+float mapfloat(float x, float in_min, float in_max, float out_min, float out_max);
+void setZeroPoint();
 
 int parsePolling(const char* buf);
 
@@ -94,8 +104,8 @@ int wifiStatus = WL_IDLE_STATUS;
 
 WiFiClient client;
 
-//char server[] = "rhinodream.com";
-IPAddress server(54,249,125,244);
+char server[] = "www.wepet.net";
+//IPAddress server(54,249,125,244);
 
 unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
 boolean lastConnected = false;                  // state of the connection last time through the main loop
@@ -253,8 +263,7 @@ void setup() {
   } 
   
   feederMode = MODE_POLLING;
-  Serial.print("init vector size : ");
-  Serial.println(feedWeightVector.getMaxSize());
+  
   Serial.println("waiting for setup...");
 }
 
@@ -516,6 +525,8 @@ void checkString(String& input) {
     closeFeeder();
   } else if (input == "setup") {
     Serial.println("setup WepetFeeder");
+  } else if (input == "setZero" || input == "z") {
+    setZeroPoint();
   } else {
     char buf[64];
     input.toCharArray(buf, 63);
